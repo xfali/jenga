@@ -27,7 +27,7 @@ func TestTar(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer f.Close()
-		err = tar.Write(testFile, f)
+		err = tar.Write(testFile, 0, f)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -46,7 +46,7 @@ func TestTar(t *testing.T) {
 			t.Log(v)
 		}
 		b := &strings.Builder{}
-		err = tar.Read(testFile, b)
+		_, err = tar.Read(testFile, b)
 		if err != nil {
 			t.Fatal(err)
 		}
