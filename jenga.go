@@ -38,10 +38,10 @@ type Jenga interface {
 
 type Writer interface {
 	// 使用key保存数据
-	Write(key string, r io.Reader) error
+	Write(key string, size int64, r io.Reader) error
 }
 
 type Reader interface {
 	// 使用key获取数据
-	Read(key string, w io.Writer) error
+	Read(key string, w io.Writer) (int64, error)
 }

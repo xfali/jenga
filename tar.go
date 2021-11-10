@@ -88,7 +88,7 @@ func (jenga *tarJenga) KeyList() []string {
 	return nil
 }
 
-func (jenga *tarJenga) Write(path string, r io.Reader) error {
+func (jenga *tarJenga) Write(path string, size int64, r io.Reader) error {
 	if !jenga.flag.CanWrite() {
 		return WriteFlagError
 	}
@@ -117,9 +117,9 @@ func (jenga *tarJenga) Write(path string, r io.Reader) error {
 	}
 }
 
-func (jenga *tarJenga) Read(path string, w io.Writer) error {
+func (jenga *tarJenga) Read(path string, w io.Writer) (int64, error) {
 	if !jenga.flag.CanRead() {
-		return ReadFlagError
+		return 0, ReadFlagError
 	}
 	r := tar.NewReader(jenga.file)
 	path = filepath.Base(path)
@@ -127,17 +127,17 @@ func (jenga *tarJenga) Read(path string, w io.Writer) error {
 		h, err := r.Next()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				return fmt.Errorf("Cannot found file: %s. ", path)
+				return 0, fmt.Errorf("Cannot found file: %s. ", path)
 			} else {
-				return err
+				return 0, err
 			}
 		}
 		if h.Name == path {
-			_, err = io.Copy(w, r)
+			n, err := io.Copy(w, r)
 			if err != nil {
-				return ReadFailedError
+				return n, ReadFailedError
 			}
-			return nil
+			return n, nil
 		}
 	}
 }

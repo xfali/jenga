@@ -104,15 +104,15 @@ func (bf *BlkMFile) Keys() []string {
 	return ret
 }
 
-func (bf *BlkMFile) ReadBlockByKey(key string, w io.Writer) error {
+func (bf *BlkMFile) ReadBlockByKey(key string, w io.Writer) (int64, error) {
 	if v, ok := bf.meta.Load(key); ok {
 		header := v.(*BlkHeader)
 		if header.Invalid() {
-			return fmt.Errorf("Block with key: %s not found. ", key)
+			return 0, fmt.Errorf("Block with key: %s not found. ", key)
 		}
 		err := bf.f.seek(header.offset)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		var n int64
 		if w != nil {
@@ -124,14 +124,14 @@ func (bf *BlkMFile) ReadBlockByKey(key string, w io.Writer) error {
 		}
 		bf.f.cur += n
 		if err != nil {
-			return err
+			return n, err
 		}
 		if n != header.Size {
-			return errors.New("Read size is not match then Header Size! ")
+			return n, errors.New("Read size is not match then Header Size! ")
 		}
-		return nil
+		return n, nil
 	} else {
-		return fmt.Errorf("Block with key: %s not found. ", key)
+		return 0, fmt.Errorf("Block with key: %s not found. ", key)
 	}
 }
 

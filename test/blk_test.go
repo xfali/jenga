@@ -113,7 +113,7 @@ func TestBlkMFile(t *testing.T) {
 		keys := f.Keys()
 		for _, v := range keys {
 			buf.Reset()
-			err := f.ReadBlockByKey(v, buf)
+			_, err := f.ReadBlockByKey(v, buf)
 			if err != nil {
 				t.Fatal(err)
 			}
