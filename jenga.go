@@ -5,18 +5,21 @@
 
 package jenga
 
-import "io"
+import (
+	"github.com/xfali/jenga/flags"
+	"io"
+)
 
 const (
 	// 只读
-	OpFlagReadOnly  OpenFlag = 1
+	OpFlagReadOnly OpenFlag = 1
 	// 只写
 	OpFlagWriteOnly OpenFlag = 1 << 1
 	// 如不存在则创建
-	OpFlagCreate    OpenFlag = 1 << 2
+	OpFlagCreate OpenFlag = 1 << 2
 )
 
-type OpenFlag int
+type OpenFlag = flags.OpenFlag
 
 type Jenga interface {
 	// 打开
@@ -41,16 +44,4 @@ type Writer interface {
 type Reader interface {
 	// 使用key获取数据
 	Read(key string, w io.Writer) error
-}
-
-func (f OpenFlag) CanRead() bool {
-	return f&OpFlagReadOnly != 0
-}
-
-func (f OpenFlag) CanWrite() bool {
-	return f&OpFlagWriteOnly != 0
-}
-
-func (f OpenFlag) NeedCreate() bool {
-	return f&OpFlagCreate != 0
 }

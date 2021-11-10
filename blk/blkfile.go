@@ -9,16 +9,17 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/xfali/jenga"
+	"github.com/xfali/jenga/flags"
 	"io"
 	"os"
 )
 
 const (
-	BlkFileMagicCode  uint16 = 0xB1EF
-	BlkFileVersion    uint16 = 0x0001
-	BlkFileHeadSize          = 4
-	BlkFileBufferSize        = 32 * 1024
+	BlkFileMagicCode       uint16 = 0xB1EF
+	BlkFileVersion         uint16 = 0x0001
+	BlkFileHeadSize               = 4
+	BlkFileBufferSize             = 32 * 1024
+	BlkHeaderUnknownOffset        = -1
 )
 
 type BlkFile struct {
@@ -27,17 +28,25 @@ type BlkFile struct {
 	magic   uint16
 	version uint16
 	buf     []byte
+	cur     int64
 }
 
 type BlkHeader struct {
-	Key  string
+	// block key(name)
+	Key string
+
+	// block size
 	Size int64
+
+	// block offset
+	offset int64
 }
 
 func NewBlkHeader(key string, size int64) *BlkHeader {
 	return &BlkHeader{
-		Key:  key,
-		Size: size,
+		Key:    key,
+		Size:   size,
+		offset: BlkHeaderUnknownOffset,
 	}
 }
 
@@ -47,14 +56,15 @@ func NewBlkFile(path string) *BlkFile {
 		magic:   BlkFileMagicCode,
 		version: BlkFileVersion,
 		buf:     make([]byte, BlkFileBufferSize),
+		cur:     0,
 	}
 }
 
-func (bf *BlkFile) Open(flag jenga.OpenFlag) error {
+func (bf *BlkFile) Open(flag flags.OpenFlag) error {
 	if flag.CanWrite() && flag.CanRead() {
 		return errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
 	}
-	_, err := os.Stat(bf.path)
+	info, err := os.Stat(bf.path)
 	if err == nil {
 		if flag.CanRead() {
 			f, err := os.Open(bf.path)
@@ -62,9 +72,10 @@ func (bf *BlkFile) Open(flag jenga.OpenFlag) error {
 				return err
 			}
 			bf.file = f
+			bf.cur = BlkFileHeadSize
 			return bf.readHeader()
 		} else if flag.CanWrite() {
-			f, err := os.OpenFile(bf.path, os.O_WRONLY|os.O_APPEND, 0666)
+			f, err := os.OpenFile(bf.path, os.O_RDWR|os.O_APPEND, 0666)
 			if err != nil {
 				return err
 			}
@@ -73,6 +84,7 @@ func (bf *BlkFile) Open(flag jenga.OpenFlag) error {
 			if err != nil {
 				return err
 			}
+			bf.cur = info.Size()
 			_, err = bf.file.Seek(0, io.SeekEnd)
 			return err
 		}
@@ -83,10 +95,11 @@ func (bf *BlkFile) Open(flag jenga.OpenFlag) error {
 				return err
 			}
 			bf.file = f
+			bf.cur = BlkFileHeadSize
 			return bf.writeHeader(0)
 		}
 	}
-	return jenga.OpenError
+	return fmt.Errorf("Cannot open file %s with flag %d. ", bf.path, flag)
 }
 
 func (bf *BlkFile) Close() error {
@@ -158,11 +171,13 @@ func (bf *BlkFile) WriteBlock(header *BlkHeader, reader io.Reader) error {
 	length := len(header.Key)
 	vi := VarInt{}
 	vi.InitFromUInt64(uint64(length))
-	_, err := bf.file.Write(vi.Bytes())
+	wn, err := bf.file.Write(vi.Bytes())
+	bf.cur += int64(wn)
 	if err != nil {
 		return err
 	}
-	_, err = bf.file.Write([]byte(header.Key))
+	wn, err = bf.file.Write([]byte(header.Key))
+	bf.cur += int64(wn)
 	if err != nil {
 		return err
 	}
@@ -172,6 +187,7 @@ func (bf *BlkFile) WriteBlock(header *BlkHeader, reader io.Reader) error {
 		return err
 	}
 	n, err := io.CopyBuffer(bf.file, reader, bf.buf)
+	bf.cur += int64(n)
 	if err != nil {
 		return err
 	}
@@ -185,11 +201,25 @@ func (h *BlkHeader) String() string {
 	return fmt.Sprintf("key: %s , size: %d", h.Key, h.Size)
 }
 
+func (h *BlkHeader) Invalid() bool {
+	return h.Size == 0
+}
+
+func (bf *BlkFile) seek(offset int64) error {
+	cur, err := bf.file.Seek(offset, io.SeekStart)
+	if err != nil {
+		return err
+	}
+	bf.cur = cur
+	return nil
+}
+
 func (bf *BlkFile) ReadBlock(w io.Writer) (*BlkHeader, error) {
 	header := &BlkHeader{}
 
 	vi := VarInt{}
-	b, _, err := vi.LoadFromReader(bf.file)
+	b, rn, err := vi.LoadFromReader(bf.file)
+	bf.cur += int64(rn)
 	if err != nil {
 		return nil, err
 	}
@@ -198,25 +228,36 @@ func (bf *BlkFile) ReadBlock(w io.Writer) (*BlkHeader, error) {
 	}
 	size := vi.ToUint()
 	buf := make([]byte, size)
-	_, err = bf.file.Read(buf)
+	rn, err = bf.file.Read(buf)
+	bf.cur += int64(rn)
 	if err != nil {
 		return nil, err
 	}
 	header.Key = string(buf)
 	vi = VarInt{}
-	b, _, err = vi.LoadFromReader(bf.file)
+	b, rn, err = vi.LoadFromReader(bf.file)
+	bf.cur += int64(rn)
 	if err != nil {
 		return nil, err
 	}
 	header.Size = vi.ToInt()
-	r := io.LimitReader(bf.file, header.Size)
-	n, err := io.CopyBuffer(w, r, bf.buf)
+	header.offset = bf.cur
+	var n int64
+	if w != nil {
+		r := io.LimitReader(bf.file, header.Size)
+		n, err = io.CopyBuffer(w, r, bf.buf)
+	} else {
+		n, err = bf.file.Seek(header.Size, io.SeekCurrent)
+		n = n - bf.cur
+	}
+	bf.cur += n
 	if err != nil {
 		return nil, err
 	}
 	if n != header.Size {
 		return nil, errors.New("Read size is not match then Header Size! ")
 	}
+
 	return header, nil
 }
 
