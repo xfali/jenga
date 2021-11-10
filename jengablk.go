@@ -6,6 +6,7 @@
 package jenga
 
 import (
+	"fmt"
 	"github.com/xfali/jenga/blk"
 	"io"
 )
@@ -33,6 +34,9 @@ func (jenga *blkJenga) KeyList() []string {
 func (jenga *blkJenga) Write(path string, size int64, r io.Reader) error {
 	if !jenga.flag.CanWrite() {
 		return WriteFlagError
+	}
+	if size <= 0 {
+		return fmt.Errorf("blkJenga param size %d is Illegal, it must be actual reader data size. ",  size)
 	}
 	return jenga.blk.WriteBlock(jengablk.NewBlkHeader(path, size), r)
 }
