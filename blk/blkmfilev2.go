@@ -159,3 +159,15 @@ func (opts mfileV2Opts) WithCompressor(compressor compressor.Compressor) MFileV2
 		f.f.WithCompressor(compressor)
 	}
 }
+
+func (opts mfileV2Opts) WithGzip() MFileV2Opt {
+	return func(f *BlkMFileV2) {
+		f.f.WithCompressor(compressor.NewGzipCompressor())
+	}
+}
+
+func (opts mfileV2Opts) WithZlib() MFileV2Opt {
+	return func(f *BlkMFileV2) {
+		f.f.WithCompressor(compressor.NewZlibCompressor())
+	}
+}

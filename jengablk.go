@@ -13,13 +13,19 @@ import (
 
 type blkJenga struct {
 	flag OpenFlag
-	blk  *jengablk.BlkMFile
+	blk  jengablk.JengaBlocks
 }
 
-func NewJenga(path string, opts ...jengablk.MFileOpt) *blkJenga {
-	return &blkJenga{
-		blk: jengablk.NewBlkMFile(path, opts...),
+type Opt func(j *blkJenga, uri string)
+
+func NewJenga(uri string, opts ...Opt) *blkJenga {
+	ret := &blkJenga{
+		blk: jengablk.NewBlkMFile(uri),
 	}
+	for _, opt := range opts {
+		opt(ret, uri)
+	}
+	return ret
 }
 
 func (jenga *blkJenga) Open(flag OpenFlag) error {
@@ -35,7 +41,7 @@ func (jenga *blkJenga) Write(path string, size int64, r io.Reader) error {
 	if !jenga.flag.CanWrite() {
 		return WriteFlagError
 	}
-	if size <= 0 && jenga.blk.NeedSize() {
+	if jenga.blk.NeedSize() && (size <= 0 && r != nil) {
 		return fmt.Errorf("blkJenga param size %d is Illegal, it must be actual reader data size. ", size)
 	}
 	return jenga.blk.WriteBlock(jengablk.NewBlkHeader(path, size), r)
@@ -50,4 +56,16 @@ func (jenga *blkJenga) Read(path string, w io.Writer) (int64, error) {
 
 func (jenga *blkJenga) Close() (err error) {
 	return jenga.blk.Close()
+}
+
+func V1(opts ...jengablk.MFileOpt) Opt {
+	return func(j *blkJenga, uri string) {
+		j.blk = jengablk.NewBlkMFile(uri, opts...)
+	}
+}
+
+func V2(opts ...jengablk.MFileV2Opt) Opt {
+	return func(j *blkJenga, uri string) {
+		j.blk = jengablk.NewBlkMFileV2(uri, opts...)
+	}
 }
