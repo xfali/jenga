@@ -14,15 +14,24 @@ import (
 	"sync"
 )
 
+type GetSizeFunc func(string) int64
+
 type BlkMFile struct {
-	f    *BlkFile
-	meta sync.Map
+	f        *BlkFile
+	sizeFunc GetSizeFunc
+	meta     sync.Map
 }
 
-func NewBlkMFile(path string) *BlkMFile {
-	return &BlkMFile{
+type MFileOpt func(f *BlkMFile)
+
+func NewBlkMFile(path string, opts ...MFileOpt) *BlkMFile {
+	ret := &BlkMFile{
 		f: NewBlkFile(path),
 	}
+	for _, opt := range opts {
+		opt(ret)
+	}
+	return ret
 }
 
 func (bf *BlkMFile) Open(flag flags.OpenFlag) error {
@@ -88,7 +97,21 @@ func (bf *BlkMFile) WriteBlock(header *BlkHeader, reader io.Reader) error {
 	if _, ok := bf.meta.LoadOrStore(header.Key, header); ok {
 		return fmt.Errorf("Block with key %s have been written. ", header.Key)
 	}
+	if header.Size == 0 && reader != nil {
+		if bf.sizeFunc != nil {
+			size := bf.sizeFunc(header.Key)
+			if size > 0 {
+				header.Size = size
+				return bf.f.WriteBlock(header, reader)
+			}
+		}
+		return fmt.Errorf("Block with key %s size is 0. ", header.Key)
+	}
 	return bf.f.WriteBlock(header, reader)
+}
+
+func (bf *BlkMFile) NeedSize() bool {
+	return bf.sizeFunc == nil
 }
 
 func (bf *BlkMFile) ReadBlock(w io.Writer) (*BlkHeader, error) {
@@ -137,4 +160,26 @@ func (bf *BlkMFile) ReadBlockByKey(key string, w io.Writer) (int64, error) {
 
 func (bf *BlkMFile) Flush() error {
 	return bf.f.Flush()
+}
+
+type mfileOpts struct{}
+
+var MFileOpts mfileOpts
+
+func (opts mfileOpts) WithSizeFun(sizeFunc GetSizeFunc) MFileOpt {
+	return func(f *BlkMFile) {
+		f.sizeFunc = sizeFunc
+	}
+}
+
+func (opts mfileOpts) FileKey() MFileOpt {
+	return func(f *BlkMFile) {
+		f.sizeFunc = func(s string) int64 {
+			info, err := os.Stat(s)
+			if err != nil {
+				return 0
+			}
+			return info.Size()
+		}
+	}
 }

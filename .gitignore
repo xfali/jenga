@@ -17,3 +17,5 @@
 /.idea/
 *.zip
 *.blk
+*.db
+*.tar

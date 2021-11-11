@@ -12,11 +12,11 @@ import (
 
 const (
 	// 只读
-	OpFlagReadOnly OpenFlag = 1
+	OpFlagReadOnly = flags.OpFlagReadOnly
 	// 只写
-	OpFlagWriteOnly OpenFlag = 1 << 1
+	OpFlagWriteOnly = flags.OpFlagWriteOnly
 	// 如不存在则创建
-	OpFlagCreate OpenFlag = 1 << 2
+	OpFlagCreate = flags.OpFlagCreate
 )
 
 type OpenFlag = flags.OpenFlag

@@ -12,41 +12,42 @@ import (
 	"testing"
 )
 
-var testFile = "./test.json"
-
-func TestTar(t *testing.T) {
+func TestJenga(t *testing.T) {
+	blks := jenga.NewJenga("./test.db")
 	t.Run("write", func(t *testing.T) {
-		tar := jenga.NewTar("./test.tar")
-		err := tar.Open(jenga.OpFlagCreate | jenga.OpFlagWriteOnly)
+		err := blks.Open(jenga.OpFlagCreate | jenga.OpFlagWriteOnly)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer tar.Close()
+		defer blks.Close()
 		f, err := os.Open(testFile)
 		if err != nil {
 			t.Fatal(err)
 		}
+		info, err := os.Stat(testFile)
+		if err != nil {
+			t.Fatal(err)
+		}
 		defer f.Close()
-		err = tar.Write(testFile, 0, f)
+		err = blks.Write(testFile, info.Size(), f)
 		if err != nil {
 			t.Fatal(err)
 		}
 	})
 
 	t.Run("read", func(t *testing.T) {
-		tar := jenga.NewTar("./test.tar")
-		err := tar.Open(jenga.OpFlagReadOnly)
+		err := blks.Open(jenga.OpFlagReadOnly)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer tar.Close()
-		l := tar.KeyList()
+		defer blks.Close()
+		l := blks.KeyList()
 		t.Log("keys:")
 		for _, v := range l {
 			t.Log(v)
 		}
 		b := &strings.Builder{}
-		_, err = tar.Read(testFile, b)
+		_, err = blks.Read(testFile, b)
 		if err != nil {
 			t.Fatal(err)
 		}

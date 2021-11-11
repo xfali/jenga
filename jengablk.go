@@ -16,9 +16,9 @@ type blkJenga struct {
 	blk  *jengablk.BlkMFile
 }
 
-func NewJenga(path string) *blkJenga {
+func NewJenga(path string, opts ...jengablk.MFileOpt) *blkJenga {
 	return &blkJenga{
-		blk: jengablk.NewBlkMFile(path),
+		blk: jengablk.NewBlkMFile(path, opts...),
 	}
 }
 
@@ -35,8 +35,8 @@ func (jenga *blkJenga) Write(path string, size int64, r io.Reader) error {
 	if !jenga.flag.CanWrite() {
 		return WriteFlagError
 	}
-	if size <= 0 {
-		return fmt.Errorf("blkJenga param size %d is Illegal, it must be actual reader data size. ",  size)
+	if size <= 0 && jenga.blk.NeedSize() {
+		return fmt.Errorf("blkJenga param size %d is Illegal, it must be actual reader data size. ", size)
 	}
 	return jenga.blk.WriteBlock(jengablk.NewBlkHeader(path, size), r)
 }
