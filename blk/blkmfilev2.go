@@ -16,9 +16,8 @@ import (
 )
 
 type BlkMFileV2 struct {
-	f          *BlkFileV2
-	meta       sync.Map
-	compressor compressor.Compressor
+	f    *BlkFileV2
+	meta sync.Map
 }
 
 type MFileV2Opt func(f *BlkMFileV2)
@@ -129,7 +128,7 @@ func (bf *BlkMFileV2) ReadBlockByKey(key string, w io.Writer) (int64, error) {
 		var n int64
 		if w != nil {
 			r := io.LimitReader(bf.f.file, header.Size)
-			n, err = io.CopyBuffer(w, r, bf.f.buf)
+			n, _, err = bf.f.compressor.Decompress(w, r)
 		} else {
 			n, err = bf.f.file.Seek(header.Size, io.SeekCurrent)
 			n = n - bf.f.cur
@@ -157,6 +156,6 @@ var MFileV2Opts mfileV2Opts
 
 func (opts mfileV2Opts) WithCompressor(compressor compressor.Compressor) MFileV2Opt {
 	return func(f *BlkMFileV2) {
-		f.compressor = compressor
+		f.f.WithCompressor(compressor)
 	}
 }

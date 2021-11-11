@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/xfali/jenga/compressor"
 	"github.com/xfali/jenga/flags"
 	"io"
 	"os"
@@ -23,22 +24,29 @@ const (
 // Entity format:
 // |VARINT(1-10 Bytes)|STRING(string length)|DATA SIZE(8 Bytes)|DATA(data size)|
 type BlkFileV2 struct {
-	file    *os.File
-	path    string
-	magic   uint16
-	version uint16
-	buf     []byte
-	cur     int64
+	file       *os.File
+	path       string
+	magic      uint16
+	version    uint16
+	cur        int64
+	compressor compressor.Compressor
 }
 
 func NewBlkFileV2(path string) *BlkFileV2 {
 	return &BlkFileV2{
-		path:    path,
-		magic:   BlkFileMagicCode,
-		version: BlkFileV2Version,
-		buf:     make([]byte, BlkFileBufferSize),
-		cur:     0,
+		path:       path,
+		magic:      BlkFileMagicCode,
+		version:    BlkFileV2Version,
+		cur:        0,
+		compressor: compressor.NewBufferCompressor(BlkFileBufferSize),
 	}
+}
+
+func (bf *BlkFileV2) WithCompressor(compressor compressor.Compressor) *BlkFileV2 {
+	if compressor != nil {
+		bf.compressor = compressor
+	}
+	return bf
 }
 
 func (bf *BlkFileV2) Open(flag flags.OpenFlag) error {
@@ -170,8 +178,8 @@ func (bf *BlkFileV2) WriteBlock(header *BlkHeader, reader io.Reader) error {
 		return err
 	}
 	// write data
-	n, err := io.CopyBuffer(bf.file, reader, bf.buf)
-	bf.cur += int64(n)
+	_, n, err := bf.compressor.Compress(bf.file, reader)
+	bf.cur += n
 	if err != nil {
 		return err
 	}
@@ -231,7 +239,7 @@ func (bf *BlkFileV2) ReadBlock(w io.Writer) (*BlkHeader, error) {
 	var n int64
 	if w != nil {
 		r := io.LimitReader(bf.file, header.Size)
-		n, err = io.CopyBuffer(w, r, bf.buf)
+		n, _, err = bf.compressor.Decompress(w, r)
 	} else {
 		n, err = bf.file.Seek(header.Size, io.SeekCurrent)
 		n = n - bf.cur
