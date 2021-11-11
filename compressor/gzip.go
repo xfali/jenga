@@ -10,6 +10,10 @@ import (
 	"io"
 )
 
+const(
+	TypeGzip = 1
+)
+
 type gzipCompressor struct {
 	level int
 }
@@ -24,6 +28,11 @@ func NewGzipCompressorWithLevel(compressLevel int) *gzipCompressor {
 	return &gzipCompressor{
 		level: compressLevel,
 	}
+}
+
+// 压缩类型
+func (c *gzipCompressor) Type() Type {
+	return TypeGzip
 }
 
 // 将srcReader的数据压缩至dstWriter

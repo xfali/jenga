@@ -9,6 +9,10 @@ import (
 	"io"
 )
 
+const(
+	TypeNone = 0
+)
+
 type bufferCompressor struct {
 	buf []byte
 }
@@ -17,6 +21,11 @@ func NewBufferCompressor(size int) *bufferCompressor {
 	return &bufferCompressor{
 		buf: make([]byte, size),
 	}
+}
+
+// 压缩类型
+func (c *bufferCompressor) Type() Type {
+	return TypeNone
 }
 
 // 将srcReader的数据压缩至dstWriter

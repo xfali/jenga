@@ -14,6 +14,7 @@ type JengaBlocks interface {
 	Open(flag flags.OpenFlag) error
 	Keys() []string
 	WriteBlock(header *BlkHeader, reader io.Reader) error
+	ReadBlock(w io.Writer) (*BlkHeader, error)
 	ReadBlockByKey(path string, writer io.Writer) (int64, error)
 	Close() (err error)
 	NeedSize() bool

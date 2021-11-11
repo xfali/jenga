@@ -169,7 +169,7 @@ func TestBlkMFileV1(t *testing.T) {
 
 func TestBlkMFileV2(t *testing.T) {
 	_ = compressor.NewGzipCompressor()
-	f := jengablk.NewBlkMFileV2("./test.blk", jengablk.MFileV2Opts.WithCompressor(nil))
+	f := jengablk.NewBlkMFileV2("./test.blk", jengablk.MFileV2Opts.WithZlib())
 	t.Run("write1", func(t *testing.T) {
 		err := f.Open(jenga.OpFlagWriteOnly | jenga.OpFlagCreate)
 		if err != nil {

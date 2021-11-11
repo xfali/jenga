@@ -69,3 +69,9 @@ func V2(opts ...jengablk.MFileV2Opt) Opt {
 		j.blk = jengablk.NewBlkMFileV2(uri, opts...)
 	}
 }
+
+func WithFactory(factory func(uri string) jengablk.JengaBlocks) Opt {
+	return func(j *blkJenga, uri string) {
+		j.blk = factory(uri)
+	}
+}

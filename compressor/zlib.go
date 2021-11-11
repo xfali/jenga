@@ -10,11 +10,20 @@ import (
 	"io"
 )
 
+const(
+	TypeZlib = 2
+)
+
 type zlibCompressor struct {
 }
 
 func NewZlibCompressor() *zlibCompressor {
 	return &zlibCompressor{}
+}
+
+// 压缩类型
+func (c *zlibCompressor) Type() Type {
+	return TypeZlib
 }
 
 // 将srcReader的数据压缩至dstWriter

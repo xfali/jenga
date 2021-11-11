@@ -15,15 +15,11 @@ import (
 )
 
 const (
-	BlkFileMagicCode       uint16 = 0xB1EF
 	BlkFileVersion         uint16 = 0x0001
-	BlkFileHeadSize               = 4
-	BlkFileBufferSize             = 32 * 1024
-	BlkHeaderUnknownOffset        = -1
 )
 
 // File format:
-// |MAGIC NUNMBER(2 Bytes)|VERSION(2 Bytes)|ENTITY_1|ENTITY_2|...|ENTITY_N|
+// |MAGIC NUNMBER(2 Bytes)|VERSION(2 Bytes)|DATA FORMAT(2 Bytes)|REVERSE(2 Bytes)|ENTITY_1|ENTITY_2|...|ENTITY_N|
 // Entity format:
 // |VARINT(1-10 Bytes)|STRING(string length)|VARINT(1-10 Bytes)|DATA(data size)|
 type BlkFile struct {
@@ -33,25 +29,6 @@ type BlkFile struct {
 	version uint16
 	buf     []byte
 	cur     int64
-}
-
-type BlkHeader struct {
-	// block key(name)
-	Key string
-
-	// block size
-	Size int64
-
-	// block offset
-	offset int64
-}
-
-func NewBlkHeader(key string, size int64) *BlkHeader {
-	return &BlkHeader{
-		Key:    key,
-		Size:   size,
-		offset: BlkHeaderUnknownOffset,
-	}
 }
 
 func NewBlkFile(path string) *BlkFile {
@@ -113,6 +90,7 @@ func (bf *BlkFile) Close() error {
 	return nil
 }
 
+var ignoreHeader = [4]byte{}
 // 12 Bytes
 func (bf *BlkFile) writeHeader(size uint64) error {
 	buf := make([]byte, 2)
@@ -123,6 +101,13 @@ func (bf *BlkFile) writeHeader(size uint64) error {
 	}
 	binary.BigEndian.PutUint16(buf, bf.version)
 	_, err = bf.file.Write(buf)
+	if err != nil {
+		return err
+	}
+	_, err = bf.file.Write(ignoreHeader[:])
+	if err != nil {
+		return err
+	}
 	return err
 }
 
@@ -146,7 +131,8 @@ func (bf *BlkFile) readHeader() error {
 		return fmt.Errorf("Version: %d not support. ", bf.version)
 	}
 
-	return nil
+	_, err = bf.file.Seek(4, io.SeekCurrent)
+	return err
 }
 
 func (bf *BlkFile) WriteFile(path string) error {
@@ -201,14 +187,6 @@ func (bf *BlkFile) WriteBlock(header *BlkHeader, reader io.Reader) error {
 	return nil
 }
 
-func (h *BlkHeader) String() string {
-	return fmt.Sprintf("key: %s , size: %d", h.Key, h.Size)
-}
-
-func (h *BlkHeader) Invalid() bool {
-	return h.Size == 0
-}
-
 func (bf *BlkFile) seek(offset int64) error {
 	cur, err := bf.file.Seek(offset, io.SeekStart)
 	if err != nil {
@@ -237,6 +215,9 @@ func (bf *BlkFile) ReadBlock(w io.Writer) (*BlkHeader, error) {
 	if err != nil {
 		return nil, err
 	}
+	if rn != int(size) {
+		return nil, errors.New("Read key length is not match record size! ")
+	}
 	header.Key = string(buf)
 	vi = VarInt{}
 	b, rn, err = vi.LoadFromReader(bf.file)
@@ -259,7 +240,7 @@ func (bf *BlkFile) ReadBlock(w io.Writer) (*BlkHeader, error) {
 		return nil, err
 	}
 	if n != header.Size {
-		return nil, errors.New("Read size is not match then Header Size! ")
+		return nil, errors.New("Read size is not match the Header Size! ")
 	}
 
 	return header, nil

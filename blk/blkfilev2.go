@@ -20,7 +20,7 @@ const (
 )
 
 // File format:
-// |MAGIC NUNMBER(2 Bytes)|VERSION(2 Bytes)|ENTITY_1|ENTITY_2|...|ENTITY_N|
+// |MAGIC NUNMBER(2 Bytes)|VERSION(2 Bytes)|DATA FORMAT(2 Bytes)|REVERSE(2 Bytes)|ENTITY_1|ENTITY_2|...|ENTITY_N|
 // Entity format:
 // |VARINT(1-10 Bytes)|STRING(string length)|DATA SIZE(8 Bytes)|DATA(data size)|
 type BlkFileV2 struct {
@@ -29,6 +29,8 @@ type BlkFileV2 struct {
 	magic      uint16
 	version    uint16
 	cur        int64
+	dataFormat uint16
+	reverse    uint16
 	compressor compressor.Compressor
 }
 
@@ -38,7 +40,8 @@ func NewBlkFileV2(path string) *BlkFileV2 {
 		magic:      BlkFileMagicCode,
 		version:    BlkFileV2Version,
 		cur:        0,
-		compressor: compressor.NewBufferCompressor(BlkFileBufferSize),
+		compressor: nil,
+		dataFormat: compressor.TypeNone,
 	}
 }
 
@@ -85,6 +88,10 @@ func (bf *BlkFileV2) Open(flag flags.OpenFlag) error {
 			}
 			bf.file = f
 			bf.cur = BlkFileHeadSize
+			if bf.compressor == nil {
+				bf.compressor = compressor.NewBufferCompressor(BlkFileBufferSize)
+			}
+			bf.dataFormat = bf.compressor.Type().Value()
 			return bf.writeHeader(0)
 		}
 	}
@@ -108,7 +115,44 @@ func (bf *BlkFileV2) writeHeader(size uint64) error {
 	}
 	binary.BigEndian.PutUint16(buf, bf.version)
 	_, err = bf.file.Write(buf)
+	if err != nil {
+		return err
+	}
+	binary.BigEndian.PutUint16(buf, bf.dataFormat)
+	_, err = bf.file.Write(buf)
+	if err != nil {
+		return err
+	}
+	binary.BigEndian.PutUint16(buf, bf.reverse)
+	_, err = bf.file.Write(buf)
+	if err != nil {
+		return err
+	}
 	return err
+}
+
+func (bf *BlkFileV2) selectCompressor() error {
+	if bf.compressor == nil {
+		bf.compressor = compressor.NewBufferCompressor(BlkFileBufferSize)
+	}
+	cur := bf.compressor.Type().Value()
+	switch bf.dataFormat {
+	case compressor.TypeNone:
+		if cur != bf.dataFormat {
+			bf.compressor = compressor.NewBufferCompressor(BlkFileBufferSize)
+		}
+	case compressor.TypeGzip:
+		if cur != bf.dataFormat {
+			bf.compressor = compressor.NewGzipCompressor()
+		}
+	case compressor.TypeZlib:
+		if cur != bf.dataFormat {
+			bf.compressor = compressor.NewZlibCompressor()
+		}
+	default:
+		return fmt.Errorf("Cannot support format type: %d. ", bf.dataFormat)
+	}
+	return nil
 }
 
 func (bf *BlkFileV2) readHeader() error {
@@ -131,7 +175,18 @@ func (bf *BlkFileV2) readHeader() error {
 		return fmt.Errorf("Version: %d not support. ", bf.version)
 	}
 
-	return nil
+	_, err = bf.file.Read(buf)
+	if err != nil {
+		return err
+	}
+	bf.dataFormat = binary.BigEndian.Uint16(buf)
+
+	_, err = bf.file.Read(buf)
+	if err != nil {
+		return err
+	}
+	bf.reverse = binary.BigEndian.Uint16(buf)
+	return bf.selectCompressor()
 }
 
 func (bf *BlkFileV2) WriteFile(path string) error {
@@ -227,6 +282,9 @@ func (bf *BlkFileV2) ReadBlock(w io.Writer) (*BlkHeader, error) {
 	if err != nil {
 		return nil, err
 	}
+	if rn != int(size) {
+		return nil, errors.New("Read key length is not match record size! ")
+	}
 	header.Key = string(buf)
 	buf = make([]byte, 8)
 	rn, err = bf.file.Read(buf)
@@ -249,7 +307,7 @@ func (bf *BlkFileV2) ReadBlock(w io.Writer) (*BlkHeader, error) {
 		return nil, err
 	}
 	if n != header.Size {
-		return nil, errors.New("Read size is not match then Header Size! ")
+		return nil, errors.New("Read size is not match the Header Size! ")
 	}
 
 	return header, nil

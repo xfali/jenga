@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-var testFile = "./test.json"
+var testFile = "./test2.json"
 
 func TestTar(t *testing.T) {
 	t.Run("write", func(t *testing.T) {
