@@ -15,18 +15,14 @@ import (
 )
 
 const (
-	BlkFileMagicCode       uint16 = 0xB1EF
-	BlkFileVersion         uint16 = 0x0001
-	BlkFileHeadSize               = 4
-	BlkFileBufferSize             = 32 * 1024
-	BlkHeaderUnknownOffset        = -1
+	BlkFileV2Version uint16 = 0x0002
 )
 
 // File format:
 // |MAGIC NUNMBER(2 Bytes)|VERSION(2 Bytes)|ENTITY_1|ENTITY_2|...|ENTITY_N|
 // Entity format:
-// |VARINT(1-10 Bytes)|STRING(string length)|VARINT(1-10 Bytes)|DATA(data size)|
-type BlkFile struct {
+// |VARINT(1-10 Bytes)|STRING(string length)|DATA SIZE(8 Bytes)|DATA(data size)|
+type BlkFileV2 struct {
 	file    *os.File
 	path    string
 	magic   uint16
@@ -35,36 +31,17 @@ type BlkFile struct {
 	cur     int64
 }
 
-type BlkHeader struct {
-	// block key(name)
-	Key string
-
-	// block size
-	Size int64
-
-	// block offset
-	offset int64
-}
-
-func NewBlkHeader(key string, size int64) *BlkHeader {
-	return &BlkHeader{
-		Key:    key,
-		Size:   size,
-		offset: BlkHeaderUnknownOffset,
-	}
-}
-
-func NewBlkFile(path string) *BlkFile {
-	return &BlkFile{
+func NewBlkFileV2(path string) *BlkFileV2 {
+	return &BlkFileV2{
 		path:    path,
 		magic:   BlkFileMagicCode,
-		version: BlkFileVersion,
+		version: BlkFileV2Version,
 		buf:     make([]byte, BlkFileBufferSize),
 		cur:     0,
 	}
 }
 
-func (bf *BlkFile) Open(flag flags.OpenFlag) error {
+func (bf *BlkFileV2) Open(flag flags.OpenFlag) error {
 	if flag.CanWrite() && flag.CanRead() {
 		return errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
 	}
@@ -79,7 +56,7 @@ func (bf *BlkFile) Open(flag flags.OpenFlag) error {
 			bf.cur = BlkFileHeadSize
 			return bf.readHeader()
 		} else if flag.CanWrite() {
-			f, err := os.OpenFile(bf.path, os.O_RDWR|os.O_APPEND, 0666)
+			f, err := os.OpenFile(bf.path, os.O_RDWR, 0666)
 			if err != nil {
 				return err
 			}
@@ -94,7 +71,7 @@ func (bf *BlkFile) Open(flag flags.OpenFlag) error {
 		}
 	} else {
 		if flag.NeedCreate() {
-			f, err := os.OpenFile(bf.path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+			f, err := os.OpenFile(bf.path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 			if err != nil {
 				return err
 			}
@@ -106,7 +83,7 @@ func (bf *BlkFile) Open(flag flags.OpenFlag) error {
 	return fmt.Errorf("Cannot open file %s with flag %d. ", bf.path, flag)
 }
 
-func (bf *BlkFile) Close() error {
+func (bf *BlkFileV2) Close() error {
 	if bf.file != nil {
 		return bf.file.Close()
 	}
@@ -114,7 +91,7 @@ func (bf *BlkFile) Close() error {
 }
 
 // 12 Bytes
-func (bf *BlkFile) writeHeader(size uint64) error {
+func (bf *BlkFileV2) writeHeader(size uint64) error {
 	buf := make([]byte, 2)
 	binary.BigEndian.PutUint16(buf, bf.magic)
 	_, err := bf.file.Write(buf)
@@ -126,7 +103,7 @@ func (bf *BlkFile) writeHeader(size uint64) error {
 	return err
 }
 
-func (bf *BlkFile) readHeader() error {
+func (bf *BlkFileV2) readHeader() error {
 	buf := make([]byte, 2)
 	_, err := bf.file.Read(buf)
 	if err != nil {
@@ -142,14 +119,14 @@ func (bf *BlkFile) readHeader() error {
 		return err
 	}
 	bf.version = binary.BigEndian.Uint16(buf)
-	if bf.version != BlkFileVersion {
+	if bf.version != BlkFileV2Version {
 		return fmt.Errorf("Version: %d not support. ", bf.version)
 	}
 
 	return nil
 }
 
-func (bf *BlkFile) WriteFile(path string) error {
+func (bf *BlkFileV2) WriteFile(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return err
@@ -162,7 +139,7 @@ func (bf *BlkFile) WriteFile(path string) error {
 	return bf.WriteBlock(NewBlkHeader(path, info.Size()), f)
 }
 
-func (bf *BlkFile) ReadFile(path string) (*BlkHeader, error) {
+func (bf *BlkFileV2) ReadFile(path string) (*BlkHeader, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
 	if err != nil {
 		return nil, err
@@ -171,7 +148,7 @@ func (bf *BlkFile) ReadFile(path string) (*BlkHeader, error) {
 	return bf.ReadBlock(f)
 }
 
-func (bf *BlkFile) WriteBlock(header *BlkHeader, reader io.Reader) error {
+func (bf *BlkFileV2) WriteBlock(header *BlkHeader, reader io.Reader) error {
 	length := len(header.Key)
 	vi := VarInt{}
 	vi.InitFromUInt64(uint64(length))
@@ -185,31 +162,36 @@ func (bf *BlkFile) WriteBlock(header *BlkHeader, reader io.Reader) error {
 	if err != nil {
 		return err
 	}
-	vi.InitFromUInt64(uint64(header.Size))
-	_, err = bf.file.Write(vi.Bytes())
+	cur := bf.cur
+	// write data first,get data length
+	_, err = bf.file.Seek(8, io.SeekCurrent)
+	bf.cur += 8
 	if err != nil {
 		return err
 	}
+	// write data
 	n, err := io.CopyBuffer(bf.file, reader, bf.buf)
 	bf.cur += int64(n)
 	if err != nil {
 		return err
 	}
-	if n != header.Size {
-		return errors.New("Write size is not match then Header Size! ")
+	// seek to size record position
+	_, err = bf.file.Seek(cur, io.SeekStart)
+	if err != nil {
+		return err
 	}
-	return nil
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(n))
+	_, err = bf.file.Write(buf)
+	if err != nil {
+		return err
+	}
+	// seek to end
+	_, err = bf.file.Seek(bf.cur, io.SeekStart)
+	return err
 }
 
-func (h *BlkHeader) String() string {
-	return fmt.Sprintf("key: %s , size: %d", h.Key, h.Size)
-}
-
-func (h *BlkHeader) Invalid() bool {
-	return h.Size == 0
-}
-
-func (bf *BlkFile) seek(offset int64) error {
+func (bf *BlkFileV2) seek(offset int64) error {
 	cur, err := bf.file.Seek(offset, io.SeekStart)
 	if err != nil {
 		return err
@@ -218,7 +200,7 @@ func (bf *BlkFile) seek(offset int64) error {
 	return nil
 }
 
-func (bf *BlkFile) ReadBlock(w io.Writer) (*BlkHeader, error) {
+func (bf *BlkFileV2) ReadBlock(w io.Writer) (*BlkHeader, error) {
 	header := &BlkHeader{}
 
 	vi := VarInt{}
@@ -238,13 +220,13 @@ func (bf *BlkFile) ReadBlock(w io.Writer) (*BlkHeader, error) {
 		return nil, err
 	}
 	header.Key = string(buf)
-	vi = VarInt{}
-	b, rn, err = vi.LoadFromReader(bf.file)
+	buf = make([]byte, 8)
+	rn, err = bf.file.Read(buf)
 	bf.cur += int64(rn)
 	if err != nil {
 		return nil, err
 	}
-	header.Size = vi.ToInt()
+	header.Size = int64(binary.BigEndian.Uint64(buf))
 	header.offset = bf.cur
 	var n int64
 	if w != nil {
@@ -265,6 +247,6 @@ func (bf *BlkFile) ReadBlock(w io.Writer) (*BlkHeader, error) {
 	return header, nil
 }
 
-func (bf *BlkFile) Flush() error {
+func (bf *BlkFileV2) Flush() error {
 	return bf.file.Sync()
 }
