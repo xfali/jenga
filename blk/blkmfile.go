@@ -16,25 +16,33 @@ import (
 
 type GetSizeFunc func(string) int64
 
-type BlkMFile struct {
+type blockV1 struct {
 	f        *BlkFile
 	sizeFunc GetSizeFunc
 	meta     sync.Map
 }
 
-type MFileOpt func(f *BlkMFile)
+type BlocksV1Opt func(f *blockV1)
 
-func NewBlkMFile(path string, opts ...MFileOpt) *BlkMFile {
-	ret := &BlkMFile{
-		f: NewBlkFile(path),
-	}
+func NewV1BlockFile(path string, opts ...BlocksV1Opt) *blockV1 {
+	newOpt := make([]BlocksV1Opt, 0, len(opts)+1)
+	newOpt = append(newOpt, BlockV1Opts.LocalFile(path))
+	newOpt = append(newOpt, opts...)
+	return NewV1Blocks(newOpt...)
+}
+
+func NewV1Blocks(opts ...BlocksV1Opt) *blockV1 {
+	ret := &blockV1{}
 	for _, opt := range opts {
 		opt(ret)
+	}
+	if ret.f == nil {
+		panic("Blocks cannot open!")
 	}
 	return ret
 }
 
-func (bf *BlkMFile) Open(flag flags.OpenFlag) error {
+func (bf *blockV1) Open(flag flags.OpenFlag) error {
 	if flag.CanWrite() && flag.CanRead() {
 		return errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
 	}
@@ -45,7 +53,7 @@ func (bf *BlkMFile) Open(flag flags.OpenFlag) error {
 	return bf.loadMeta(flag)
 }
 
-func (bf *BlkMFile) loadMeta(flag flags.OpenFlag) error {
+func (bf *blockV1) loadMeta(flag flags.OpenFlag) error {
 	if bf.f.cur != BlkFileHeadSize {
 		err := bf.f.seek(BlkFileHeadSize)
 		if err != nil {
@@ -72,11 +80,11 @@ func (bf *BlkMFile) loadMeta(flag flags.OpenFlag) error {
 	}
 }
 
-func (bf *BlkMFile) Close() error {
+func (bf *blockV1) Close() error {
 	return bf.f.Close()
 }
 
-func (bf *BlkMFile) WriteFile(path string) error {
+func (bf *blockV1) WriteFile(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return err
@@ -89,11 +97,11 @@ func (bf *BlkMFile) WriteFile(path string) error {
 	return bf.WriteBlock(NewBlkHeader(path, info.Size()), f)
 }
 
-func (bf *BlkMFile) ReadFile(path string) (*BlkHeader, error) {
+func (bf *blockV1) ReadFile(path string) (*BlkHeader, error) {
 	return bf.f.ReadFile(path)
 }
 
-func (bf *BlkMFile) WriteBlock(header *BlkHeader, reader io.Reader) error {
+func (bf *blockV1) WriteBlock(header *BlkHeader, reader io.Reader) error {
 	if _, ok := bf.meta.LoadOrStore(header.Key, header); ok {
 		return fmt.Errorf("Block with key %s have been written. ", header.Key)
 	}
@@ -110,15 +118,15 @@ func (bf *BlkMFile) WriteBlock(header *BlkHeader, reader io.Reader) error {
 	return bf.f.WriteBlock(header, reader)
 }
 
-func (bf *BlkMFile) NeedSize() bool {
+func (bf *blockV1) NeedSize() bool {
 	return bf.sizeFunc == nil
 }
 
-func (bf *BlkMFile) ReadBlock(w io.Writer) (*BlkHeader, error) {
+func (bf *blockV1) ReadBlock(w io.Writer) (*BlkHeader, error) {
 	return bf.f.ReadBlock(w)
 }
 
-func (bf *BlkMFile) Keys() []string {
+func (bf *blockV1) Keys() []string {
 	var ret []string
 	bf.meta.Range(func(key, value interface{}) bool {
 		ret = append(ret, key.(string))
@@ -127,7 +135,7 @@ func (bf *BlkMFile) Keys() []string {
 	return ret
 }
 
-func (bf *BlkMFile) ReadBlockByKey(key string, w io.Writer) (int64, error) {
+func (bf *blockV1) ReadBlockByKey(key string, w io.Writer) (int64, error) {
 	if v, ok := bf.meta.Load(key); ok {
 		header := v.(*BlkHeader)
 		if header.Invalid() {
@@ -158,22 +166,22 @@ func (bf *BlkMFile) ReadBlockByKey(key string, w io.Writer) (int64, error) {
 	}
 }
 
-func (bf *BlkMFile) Flush() error {
+func (bf *blockV1) Flush() error {
 	return bf.f.Flush()
 }
 
-type mfileOpts struct{}
+type blockV1Opts struct{}
 
-var MFileOpts mfileOpts
+var BlockV1Opts blockV1Opts
 
-func (opts mfileOpts) WithSizeFun(sizeFunc GetSizeFunc) MFileOpt {
-	return func(f *BlkMFile) {
+func (opts blockV1Opts) WithSizeFun(sizeFunc GetSizeFunc) BlocksV1Opt {
+	return func(f *blockV1) {
 		f.sizeFunc = sizeFunc
 	}
 }
 
-func (opts mfileOpts) FileKey() MFileOpt {
-	return func(f *BlkMFile) {
+func (opts blockV1Opts) FileKey() BlocksV1Opt {
+	return func(f *blockV1) {
 		f.sizeFunc = func(s string) int64 {
 			info, err := os.Stat(s)
 			if err != nil {
@@ -181,5 +189,23 @@ func (opts mfileOpts) FileKey() MFileOpt {
 			}
 			return info.Size()
 		}
+	}
+}
+
+func (opts blockV1Opts) WithBlkFile(bf *BlkFile) BlocksV1Opt {
+	return func(f *blockV1) {
+		f.f = bf
+	}
+}
+
+func (opts blockV1Opts) LocalFile(path string) BlocksV1Opt {
+	return func(f *blockV1) {
+		f.f = NewBlkFile(path)
+	}
+}
+
+func (opts blockV1Opts) WithOpener(openers Opener) BlocksV1Opt {
+	return func(f *blockV1) {
+		f.f = NewBlkFileWithOpener(openers)
 	}
 }

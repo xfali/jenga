@@ -24,24 +24,26 @@ const (
 // Entity format:
 // |VARINT(1-10 Bytes)|STRING(string length)|DATA SIZE(8 Bytes)|DATA(data size)|
 type BlkFileV2 struct {
-	file       *os.File
-	path       string
-	magic      uint16
-	version    uint16
+	file       BlockReadWriter
+	opener     Opener
 	cur        int64
-	dataFormat uint16
-	reverse    uint16
+	header     FileHeader
 	compressor compressor.Compressor
 }
 
 func NewBlkFileV2(path string) *BlkFileV2 {
+	return NewBlkFileV2WithOpener(BlkFileV2Openers.Local(path))
+}
+
+func NewBlkFileV2WithOpener(opener Opener) *BlkFileV2 {
 	return &BlkFileV2{
-		path:       path,
-		magic:      BlkFileMagicCode,
-		version:    BlkFileV2Version,
+		opener: opener,
+		header: FileHeader{
+			Version:    BlkFileV2Version,
+			DataFormat: compressor.TypeNone,
+		},
 		cur:        0,
 		compressor: nil,
-		dataFormat: compressor.TypeNone,
 	}
 }
 
@@ -56,46 +58,45 @@ func (bf *BlkFileV2) Open(flag flags.OpenFlag) error {
 	if flag.CanWrite() && flag.CanRead() {
 		return errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
 	}
-	info, err := os.Stat(bf.path)
-	if err == nil {
+	f, new, err := bf.opener(flag)
+	bf.file = f
+	if !new {
 		if flag.CanRead() {
-			f, err := os.Open(bf.path)
-			if err != nil {
-				return err
-			}
-			bf.file = f
 			bf.cur = BlkFileHeadSize
-			return bf.readHeader()
-		} else if flag.CanWrite() {
-			f, err := os.OpenFile(bf.path, os.O_RDWR, 0666)
-			if err != nil {
-				return err
-			}
-			bf.file = f
 			err = bf.readHeader()
 			if err != nil {
+				_ = f.Close()
 				return err
 			}
-			bf.cur = info.Size()
-			_, err = bf.file.Seek(0, io.SeekEnd)
+			return nil
+		} else if flag.CanWrite() {
+			err = bf.readHeader()
+			if err != nil {
+				_ = f.Close()
+				return err
+			}
+			bf.cur, err = bf.file.Seek(0, io.SeekEnd)
+			if err != nil {
+				_ = f.Close()
+			}
 			return err
 		}
 	} else {
 		if flag.NeedCreate() {
-			f, err := os.OpenFile(bf.path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-			if err != nil {
-				return err
-			}
-			bf.file = f
 			bf.cur = BlkFileHeadSize
 			if bf.compressor == nil {
 				bf.compressor = compressor.NewBufferCompressor(BlkFileBufferSize)
 			}
-			bf.dataFormat = bf.compressor.Type().Value()
-			return bf.writeHeader(0)
+			bf.header.DataFormat = bf.compressor.Type().Value()
+			err = bf.writeHeader(0)
+			if err != nil {
+				_ = f.Close()
+			}
+			return err
 		}
 	}
-	return fmt.Errorf("Cannot open file %s with flag %d. ", bf.path, flag)
+	_ = f.Close()
+	return fmt.Errorf("Cannot open with flag %d. ", flag)
 }
 
 func (bf *BlkFileV2) Close() error {
@@ -107,28 +108,7 @@ func (bf *BlkFileV2) Close() error {
 
 // 12 Bytes
 func (bf *BlkFileV2) writeHeader(size uint64) error {
-	buf := make([]byte, 2)
-	binary.BigEndian.PutUint16(buf, bf.magic)
-	_, err := bf.file.Write(buf)
-	if err != nil {
-		return err
-	}
-	binary.BigEndian.PutUint16(buf, bf.version)
-	_, err = bf.file.Write(buf)
-	if err != nil {
-		return err
-	}
-	binary.BigEndian.PutUint16(buf, bf.dataFormat)
-	_, err = bf.file.Write(buf)
-	if err != nil {
-		return err
-	}
-	binary.BigEndian.PutUint16(buf, bf.reverse)
-	_, err = bf.file.Write(buf)
-	if err != nil {
-		return err
-	}
-	return err
+	return WriteFileHeader(bf.header, bf.file)
 }
 
 func (bf *BlkFileV2) selectCompressor() error {
@@ -136,56 +116,34 @@ func (bf *BlkFileV2) selectCompressor() error {
 		bf.compressor = compressor.NewBufferCompressor(BlkFileBufferSize)
 	}
 	cur := bf.compressor.Type().Value()
-	switch bf.dataFormat {
+	switch bf.header.DataFormat {
 	case compressor.TypeNone:
-		if cur != bf.dataFormat {
+		if cur != bf.header.DataFormat {
 			bf.compressor = compressor.NewBufferCompressor(BlkFileBufferSize)
 		}
 	case compressor.TypeGzip:
-		if cur != bf.dataFormat {
+		if cur != bf.header.DataFormat {
 			bf.compressor = compressor.NewGzipCompressor()
 		}
 	case compressor.TypeZlib:
-		if cur != bf.dataFormat {
+		if cur != bf.header.DataFormat {
 			bf.compressor = compressor.NewZlibCompressor()
 		}
 	default:
-		return fmt.Errorf("Cannot support format type: %d. ", bf.dataFormat)
+		return fmt.Errorf("Cannot support format type: %d. ", bf.header.DataFormat)
 	}
 	return nil
 }
 
 func (bf *BlkFileV2) readHeader() error {
-	buf := make([]byte, 2)
-	_, err := bf.file.Read(buf)
+	h, err := ReadFileHeader(bf.file)
 	if err != nil {
 		return err
 	}
-	bf.magic = binary.BigEndian.Uint16(buf)
-	if bf.magic != BlkFileMagicCode {
-		return errors.New("File format not match, maybe broken. ")
+	if h.Version != BlkFileV2Version {
+		return fmt.Errorf("Version: %d not support. ", h.Version)
 	}
-
-	_, err = bf.file.Read(buf)
-	if err != nil {
-		return err
-	}
-	bf.version = binary.BigEndian.Uint16(buf)
-	if bf.version != BlkFileV2Version {
-		return fmt.Errorf("Version: %d not support. ", bf.version)
-	}
-
-	_, err = bf.file.Read(buf)
-	if err != nil {
-		return err
-	}
-	bf.dataFormat = binary.BigEndian.Uint16(buf)
-
-	_, err = bf.file.Read(buf)
-	if err != nil {
-		return err
-	}
-	bf.reverse = binary.BigEndian.Uint16(buf)
+	bf.header = h
 	return bf.selectCompressor()
 }
 
@@ -315,4 +273,32 @@ func (bf *BlkFileV2) ReadBlock(w io.Writer) (*BlkHeader, error) {
 
 func (bf *BlkFileV2) Flush() error {
 	return bf.file.Sync()
+}
+
+type blkFileV2Openers struct{}
+
+var BlkFileV2Openers blkFileV2Openers
+
+func (o blkFileV2Openers) Local(path string) Opener {
+	return func(flag flags.OpenFlag) (BlockReadWriter, bool, error) {
+		if flag.CanWrite() && flag.CanRead() {
+			return nil, false, errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
+		}
+		_, err := os.Stat(path)
+		if err == nil {
+			if flag.CanRead() {
+				f, err := os.Open(path)
+				return f, false, err
+			} else if flag.CanWrite() {
+				f, err := os.OpenFile(path, os.O_RDWR, 0666)
+				return f, false, err
+			}
+		} else {
+			if flag.NeedCreate() {
+				f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+				return f, true, err
+			}
+		}
+		return nil, false, fmt.Errorf("Cannot open file %s with flag %d. ", path, flag)
+	}
 }

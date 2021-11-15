@@ -57,7 +57,7 @@ func TestJengaV1(t *testing.T) {
 }
 
 func TestJengaV2(t *testing.T) {
-	blks := jenga.NewJenga("./test.db", jenga.V2(jengablk.MFileV2Opts.WithGzip()))
+	blks := jenga.NewJenga("./test.db", jenga.V2(jengablk.BlockV2Opts.WithGzip()))
 	t.Run("write", func(t *testing.T) {
 		err := blks.Open(jenga.OpFlagCreate | jenga.OpFlagWriteOnly)
 		if err != nil {

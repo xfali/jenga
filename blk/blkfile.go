@@ -6,7 +6,6 @@
 package jengablk
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/xfali/jenga/flags"
@@ -15,7 +14,7 @@ import (
 )
 
 const (
-	BlkFileVersion         uint16 = 0x0001
+	BlkFileVersion uint16 = 0x0001
 )
 
 // File format:
@@ -23,18 +22,20 @@ const (
 // Entity format:
 // |VARINT(1-10 Bytes)|STRING(string length)|VARINT(1-10 Bytes)|DATA(data size)|
 type BlkFile struct {
-	file    *os.File
-	path    string
-	magic   uint16
+	file    BlockReadWriter
+	opener  Opener
 	version uint16
 	buf     []byte
 	cur     int64
 }
 
 func NewBlkFile(path string) *BlkFile {
+	return NewBlkFileWithOpener(BlkFileOpeners.Local(path))
+}
+
+func NewBlkFileWithOpener(opener Opener) *BlkFile {
 	return &BlkFile{
-		path:    path,
-		magic:   BlkFileMagicCode,
+		opener:  opener,
 		version: BlkFileVersion,
 		buf:     make([]byte, BlkFileBufferSize),
 		cur:     0,
@@ -45,42 +46,43 @@ func (bf *BlkFile) Open(flag flags.OpenFlag) error {
 	if flag.CanWrite() && flag.CanRead() {
 		return errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
 	}
-	info, err := os.Stat(bf.path)
-	if err == nil {
+	f, new, err := bf.opener(flag)
+	if err != nil {
+		return err
+	}
+	bf.file = f
+	if !new {
 		if flag.CanRead() {
-			f, err := os.Open(bf.path)
-			if err != nil {
-				return err
-			}
-			bf.file = f
 			bf.cur = BlkFileHeadSize
-			return bf.readHeader()
-		} else if flag.CanWrite() {
-			f, err := os.OpenFile(bf.path, os.O_RDWR|os.O_APPEND, 0666)
-			if err != nil {
-				return err
-			}
-			bf.file = f
 			err = bf.readHeader()
 			if err != nil {
+				_ = f.Close()
+			}
+			return err
+		} else if flag.CanWrite() {
+			err = bf.readHeader()
+			if err != nil {
+				_ = f.Close()
 				return err
 			}
-			bf.cur = info.Size()
-			_, err = bf.file.Seek(0, io.SeekEnd)
+			bf.cur, err = bf.file.Seek(0, io.SeekEnd)
+			if err != nil {
+				_ = f.Close()
+			}
 			return err
 		}
 	} else {
 		if flag.NeedCreate() {
-			f, err := os.OpenFile(bf.path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-			if err != nil {
-				return err
-			}
-			bf.file = f
 			bf.cur = BlkFileHeadSize
-			return bf.writeHeader(0)
+			err = bf.writeHeader(0)
+			if err != nil {
+				_ = f.Close()
+			}
+			return err
 		}
 	}
-	return fmt.Errorf("Cannot open file %s with flag %d. ", bf.path, flag)
+	_ = f.Close()
+	return fmt.Errorf("Cannot open with flag %d. ", flag)
 }
 
 func (bf *BlkFile) Close() error {
@@ -90,48 +92,22 @@ func (bf *BlkFile) Close() error {
 	return nil
 }
 
-var ignoreHeader = [4]byte{}
 // 12 Bytes
 func (bf *BlkFile) writeHeader(size uint64) error {
-	buf := make([]byte, 2)
-	binary.BigEndian.PutUint16(buf, bf.magic)
-	_, err := bf.file.Write(buf)
-	if err != nil {
-		return err
-	}
-	binary.BigEndian.PutUint16(buf, bf.version)
-	_, err = bf.file.Write(buf)
-	if err != nil {
-		return err
-	}
-	_, err = bf.file.Write(ignoreHeader[:])
-	if err != nil {
-		return err
-	}
-	return err
+	return WriteFileHeader(FileHeader{
+		Version: bf.version,
+	}, bf.file)
 }
 
 func (bf *BlkFile) readHeader() error {
-	buf := make([]byte, 2)
-	_, err := bf.file.Read(buf)
+	h, err := ReadFileHeader(bf.file)
 	if err != nil {
 		return err
 	}
-	bf.magic = binary.BigEndian.Uint16(buf)
-	if bf.magic != BlkFileMagicCode {
-		return errors.New("File format not match, maybe broken. ")
-	}
-
-	_, err = bf.file.Read(buf)
-	if err != nil {
-		return err
-	}
-	bf.version = binary.BigEndian.Uint16(buf)
-	if bf.version != BlkFileVersion {
+	if h.Version != BlkFileVersion {
 		return fmt.Errorf("Version: %d not support. ", bf.version)
 	}
-
-	_, err = bf.file.Seek(4, io.SeekCurrent)
+	bf.version = h.Version
 	return err
 }
 
@@ -248,4 +224,32 @@ func (bf *BlkFile) ReadBlock(w io.Writer) (*BlkHeader, error) {
 
 func (bf *BlkFile) Flush() error {
 	return bf.file.Sync()
+}
+
+type blkFileOpeners struct{}
+
+var BlkFileOpeners blkFileOpeners
+
+func (o blkFileOpeners) Local(path string) Opener {
+	return func(flag flags.OpenFlag) (BlockReadWriter, bool, error) {
+		if flag.CanWrite() && flag.CanRead() {
+			return nil, false, errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
+		}
+		_, err := os.Stat(path)
+		if err == nil {
+			if flag.CanRead() {
+				f, err := os.Open(path)
+				return f, false, err
+			} else if flag.CanWrite() {
+				f, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND, 0666)
+				return f, false, err
+			}
+		} else {
+			if flag.NeedCreate() {
+				f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+				return f, true, err
+			}
+		}
+		return nil, false, fmt.Errorf("Cannot open file %s with flag %d. ", path, flag)
+	}
 }

@@ -20,7 +20,7 @@ type Opt func(j *blkJenga, uri string)
 
 func NewJenga(uri string, opts ...Opt) *blkJenga {
 	ret := &blkJenga{
-		blk: jengablk.NewBlkMFile(uri),
+		blk: jengablk.NewV1BlockFile(uri),
 	}
 	for _, opt := range opts {
 		opt(ret, uri)
@@ -58,15 +58,15 @@ func (jenga *blkJenga) Close() (err error) {
 	return jenga.blk.Close()
 }
 
-func V1(opts ...jengablk.MFileOpt) Opt {
+func V1(opts ...jengablk.BlocksV1Opt) Opt {
 	return func(j *blkJenga, uri string) {
-		j.blk = jengablk.NewBlkMFile(uri, opts...)
+		j.blk = jengablk.NewV1BlockFile(uri, opts...)
 	}
 }
 
-func V2(opts ...jengablk.MFileV2Opt) Opt {
+func V2(opts ...jengablk.BlocksV2Opt) Opt {
 	return func(j *blkJenga, uri string) {
-		j.blk = jengablk.NewBlkMFileV2(uri, opts...)
+		j.blk = jengablk.NewV2BlockFile(uri, opts...)
 	}
 }
 

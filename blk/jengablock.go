@@ -10,6 +10,16 @@ import (
 	"io"
 )
 
+type BlockReadWriter interface {
+	io.Reader
+	io.Writer
+	io.Seeker
+	io.Closer
+	Sync() error
+}
+
+type Opener func(flag flags.OpenFlag) (rw BlockReadWriter, new bool, err error)
+
 type JengaBlocks interface {
 	Open(flag flags.OpenFlag) error
 	Keys() []string
@@ -18,4 +28,5 @@ type JengaBlocks interface {
 	ReadBlockByKey(path string, writer io.Writer) (int64, error)
 	Close() (err error)
 	NeedSize() bool
+	Flush() error
 }

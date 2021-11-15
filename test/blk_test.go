@@ -101,9 +101,9 @@ func TestBlkFileV2(t *testing.T) {
 	})
 }
 
-func TestBlkMFileV1(t *testing.T) {
+func TestV1BlockFile(t *testing.T) {
 	t.Run("write1", func(t *testing.T) {
-		f := jengablk.NewBlkMFile("./test.blk")
+		f := jengablk.NewV1BlockFile("./test.blk")
 		err := f.Open(jenga.OpFlagWriteOnly | jenga.OpFlagCreate)
 		if err != nil {
 			t.Fatal(err)
@@ -120,7 +120,7 @@ func TestBlkMFileV1(t *testing.T) {
 	})
 
 	t.Run("write2", func(t *testing.T) {
-		f := jengablk.NewBlkMFile("./test.blk")
+		f := jengablk.NewV1BlockFile("./test.blk")
 		err := f.Open(jenga.OpFlagWriteOnly | jenga.OpFlagCreate)
 		if err != nil {
 			t.Fatal(err)
@@ -133,7 +133,7 @@ func TestBlkMFileV1(t *testing.T) {
 	})
 
 	t.Run("read", func(t *testing.T) {
-		f := jengablk.NewBlkMFile("./test.blk")
+		f := jengablk.NewV1BlockFile("./test.blk")
 		err := f.Open(jenga.OpFlagReadOnly)
 		if err != nil {
 			t.Fatal(err)
@@ -169,7 +169,7 @@ func TestBlkMFileV1(t *testing.T) {
 
 func TestBlkMFileV2(t *testing.T) {
 	_ = compressor.NewGzipCompressor()
-	f := jengablk.NewBlkMFileV2("./test.blk", jengablk.MFileV2Opts.WithZlib())
+	f := jengablk.NewV2BlockFile("./test.blk", jengablk.BlockV2Opts.WithZlib())
 	t.Run("write1", func(t *testing.T) {
 		err := f.Open(jenga.OpFlagWriteOnly | jenga.OpFlagCreate)
 		if err != nil {

@@ -15,24 +15,32 @@ import (
 	"sync"
 )
 
-type BlkMFileV2 struct {
+type blockV2 struct {
 	f    *BlkFileV2
 	meta sync.Map
 }
 
-type MFileV2Opt func(f *BlkMFileV2)
+type BlocksV2Opt func(f *blockV2)
 
-func NewBlkMFileV2(path string, opts ...MFileV2Opt) *BlkMFileV2 {
-	ret := &BlkMFileV2{
-		f: NewBlkFileV2(path),
-	}
+func NewV2BlockFile(path string, opts ...BlocksV2Opt) *blockV2 {
+	newOpt := make([]BlocksV2Opt, 0, len(opts)+1)
+	newOpt = append(newOpt, BlockV2Opts.LocalFile(path))
+	newOpt = append(newOpt, opts...)
+	return NewV2Blocks(newOpt...)
+}
+
+func NewV2Blocks(opts ...BlocksV2Opt) *blockV2 {
+	ret := &blockV2{}
 	for _, opt := range opts {
 		opt(ret)
+	}
+	if ret.f == nil {
+		panic("Blocks cannot open!")
 	}
 	return ret
 }
 
-func (bf *BlkMFileV2) Open(flag flags.OpenFlag) error {
+func (bf *blockV2) Open(flag flags.OpenFlag) error {
 	if flag.CanWrite() && flag.CanRead() {
 		return errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
 	}
@@ -43,7 +51,7 @@ func (bf *BlkMFileV2) Open(flag flags.OpenFlag) error {
 	return bf.loadMeta(flag)
 }
 
-func (bf *BlkMFileV2) loadMeta(flag flags.OpenFlag) error {
+func (bf *blockV2) loadMeta(flag flags.OpenFlag) error {
 	if bf.f.cur != BlkFileHeadSize {
 		err := bf.f.seek(BlkFileHeadSize)
 		if err != nil {
@@ -70,11 +78,11 @@ func (bf *BlkMFileV2) loadMeta(flag flags.OpenFlag) error {
 	}
 }
 
-func (bf *BlkMFileV2) Close() error {
+func (bf *blockV2) Close() error {
 	return bf.f.Close()
 }
 
-func (bf *BlkMFileV2) WriteFile(path string) error {
+func (bf *blockV2) WriteFile(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return err
@@ -87,26 +95,26 @@ func (bf *BlkMFileV2) WriteFile(path string) error {
 	return bf.WriteBlock(NewBlkHeader(path, info.Size()), f)
 }
 
-func (bf *BlkMFileV2) ReadFile(path string) (*BlkHeader, error) {
+func (bf *blockV2) ReadFile(path string) (*BlkHeader, error) {
 	return bf.f.ReadFile(path)
 }
 
-func (bf *BlkMFileV2) WriteBlock(header *BlkHeader, reader io.Reader) error {
+func (bf *blockV2) WriteBlock(header *BlkHeader, reader io.Reader) error {
 	if _, ok := bf.meta.LoadOrStore(header.Key, header); ok {
 		return fmt.Errorf("Block with key %s have been written. ", header.Key)
 	}
 	return bf.f.WriteBlock(header, reader)
 }
 
-func (bf *BlkMFileV2) NeedSize() bool {
+func (bf *blockV2) NeedSize() bool {
 	return false
 }
 
-func (bf *BlkMFileV2) ReadBlock(w io.Writer) (*BlkHeader, error) {
+func (bf *blockV2) ReadBlock(w io.Writer) (*BlkHeader, error) {
 	return bf.f.ReadBlock(w)
 }
 
-func (bf *BlkMFileV2) Keys() []string {
+func (bf *blockV2) Keys() []string {
 	var ret []string
 	bf.meta.Range(func(key, value interface{}) bool {
 		ret = append(ret, key.(string))
@@ -115,7 +123,7 @@ func (bf *BlkMFileV2) Keys() []string {
 	return ret
 }
 
-func (bf *BlkMFileV2) ReadBlockByKey(key string, w io.Writer) (int64, error) {
+func (bf *blockV2) ReadBlockByKey(key string, w io.Writer) (int64, error) {
 	if v, ok := bf.meta.Load(key); ok {
 		header := v.(*BlkHeader)
 		if header.Invalid() {
@@ -146,28 +154,46 @@ func (bf *BlkMFileV2) ReadBlockByKey(key string, w io.Writer) (int64, error) {
 	}
 }
 
-func (bf *BlkMFileV2) Flush() error {
+func (bf *blockV2) Flush() error {
 	return bf.f.Flush()
 }
 
-type mfileV2Opts struct{}
+type blockV2Opts struct{}
 
-var MFileV2Opts mfileV2Opts
+var BlockV2Opts blockV2Opts
 
-func (opts mfileV2Opts) WithCompressor(compressor compressor.Compressor) MFileV2Opt {
-	return func(f *BlkMFileV2) {
+func (opts blockV2Opts) WithCompressor(compressor compressor.Compressor) BlocksV2Opt {
+	return func(f *blockV2) {
 		f.f.WithCompressor(compressor)
 	}
 }
 
-func (opts mfileV2Opts) WithGzip() MFileV2Opt {
-	return func(f *BlkMFileV2) {
+func (opts blockV2Opts) WithGzip() BlocksV2Opt {
+	return func(f *blockV2) {
 		f.f.WithCompressor(compressor.NewGzipCompressor())
 	}
 }
 
-func (opts mfileV2Opts) WithZlib() MFileV2Opt {
-	return func(f *BlkMFileV2) {
+func (opts blockV2Opts) WithZlib() BlocksV2Opt {
+	return func(f *blockV2) {
 		f.f.WithCompressor(compressor.NewZlibCompressor())
+	}
+}
+
+func (opts blockV2Opts) WithBlkFile(bf *BlkFileV2) BlocksV2Opt {
+	return func(f *blockV2) {
+		f.f = bf
+	}
+}
+
+func (opts blockV2Opts) LocalFile(path string) BlocksV2Opt {
+	return func(f *blockV2) {
+		f.f = NewBlkFileV2(path)
+	}
+}
+
+func (opts blockV2Opts) WithOpener(openers Opener) BlocksV2Opt {
+	return func(f *blockV2) {
+		f.f = NewBlkFileV2WithOpener(openers)
 	}
 }

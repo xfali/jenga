@@ -5,7 +5,12 @@
 
 package jengablk
 
-import "fmt"
+import (
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"io"
+)
 
 const (
 	BlkFileMagicCode       uint16 = 0xB1EF
@@ -39,4 +44,67 @@ func (h *BlkHeader) String() string {
 
 func (h *BlkHeader) Invalid() bool {
 	return h.Size == 0
+}
+
+type FileHeader struct {
+	MagicCode  uint16
+	Version    uint16
+	DataFormat uint16
+	Reverse    uint16
+}
+
+func ReadFileHeader(r io.Reader) (FileHeader, error) {
+	h := FileHeader{}
+	buf := make([]byte, 2)
+	_, err := r.Read(buf)
+	if err != nil {
+		return h, err
+	}
+	h.MagicCode = binary.BigEndian.Uint16(buf)
+	if h.MagicCode != BlkFileMagicCode {
+		return h, errors.New("File format not match, maybe broken. ")
+	}
+	_, err = r.Read(buf)
+	if err != nil {
+		return h, err
+	}
+	h.Version = binary.BigEndian.Uint16(buf)
+
+	_, err = r.Read(buf)
+	if err != nil {
+		return h, err
+	}
+	h.DataFormat = binary.BigEndian.Uint16(buf)
+
+	_, err = r.Read(buf)
+	if err != nil {
+		return h, err
+	}
+	h.Reverse = binary.BigEndian.Uint16(buf)
+	return h, nil
+}
+
+func WriteFileHeader(h FileHeader, w io.Writer) error {
+	buf := make([]byte, 2)
+	binary.BigEndian.PutUint16(buf, BlkFileMagicCode)
+	_, err := w.Write(buf)
+	if err != nil {
+		return err
+	}
+	binary.BigEndian.PutUint16(buf, h.Version)
+	_, err = w.Write(buf)
+	if err != nil {
+		return err
+	}
+	binary.BigEndian.PutUint16(buf, h.DataFormat)
+	_, err = w.Write(buf)
+	if err != nil {
+		return err
+	}
+	binary.BigEndian.PutUint16(buf, h.Reverse)
+	_, err = w.Write(buf)
+	if err != nil {
+		return err
+	}
+	return err
 }
