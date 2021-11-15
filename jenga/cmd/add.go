@@ -33,6 +33,8 @@ var addCmd = &cobra.Command{
 		jengaPath := viper.GetString(ParamShortJengaFile)
 		key := addViper.GetString(ParamGetKey)
 		source := addViper.GetString(ParamSourceFile)
+		gzip := addViper.GetBool(ParamJengaGzip)
+		zlib := addViper.GetBool(ParamJengaZlib)
 		if jengaPath == "" {
 			fatal("Jenga path is empty, add jenga with flags: -j or --jenga-file")
 		}
@@ -40,7 +42,21 @@ var addCmd = &cobra.Command{
 		if source == "" {
 			fatal("Source is empty, add source path with flags: -s or --source-file")
 		}
-		blks := jenga.NewJenga(jengaPath, jenga.V2Gzip())
+		if gzip && zlib {
+			fatal("Flag cannot contains both gizp [--compress-gzip | -g] and zlib [--compress-zlib | -z]")
+		}
+		var blks jenga.Jenga
+		if gzip {
+			debug("Jenga with compress gzip")
+			blks = jenga.NewJenga(jengaPath, jenga.V2Gzip())
+		} else if zlib {
+			debug("Jenga with compress zlib")
+			blks = jenga.NewJenga(jengaPath, jenga.V2Zlib())
+		} else {
+			debug("Jenga without compress")
+			blks = jenga.NewJenga(jengaPath, jenga.V2())
+		}
+
 		err := blks.Open(jenga.OpFlagCreate | jenga.OpFlagWriteOnly)
 		if err != nil {
 			fatal(err.Error())
@@ -111,6 +127,12 @@ func init() {
 	fs.StringP(ParamSourceFile, ParamShortSourceFile, "", "Source file to add")
 	setValue(addViper, fs, ParamSourceFile, ParamShortSourceFile)
 
-	fs.StringP(ParamGetKey, ParamShortGetKey, "", "key of data")
+	fs.StringP(ParamGetKey, ParamShortGetKey, "", "Key of data")
 	setValue(addViper, fs, ParamGetKey, ParamShortGetKey)
+
+	fs.BoolP(ParamJengaGzip, ParamShortJengaGzip, false, "Compress with gzip")
+	setValue(addViper, fs, ParamJengaGzip, ParamShortJengaGzip)
+
+	fs.BoolP(ParamJengaZlib, ParamShortJengaZlib, false, "Compress with zlib")
+	setValue(addViper, fs, ParamJengaZlib, ParamShortJengaZlib)
 }
