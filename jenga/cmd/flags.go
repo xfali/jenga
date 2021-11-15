@@ -22,16 +22,24 @@ const (
 	FlagShortTargetFile  = "flag.short.target.path"
 	ParamShortTargetFile = "f"
 	FlagJengaFile        = "flag.jenga.path"
+	ParamJengaFile       = "jenga-file"
 	ParamShortJengaFile  = "j"
 	ParamGetKey          = "key"
 	ParamShortGetKey     = "k"
+	ParamLogVerbose      = "verbose"
+	ParamShortLogVerbose = "v"
 )
 
-func setValue(fs *pflag.FlagSet, names ...string) bool {
+func setValue(v *viper.Viper, fs *pflag.FlagSet, names ...string) bool {
 	for _, s := range names {
 		f := fs.Lookup(s)
 		if f != nil {
-			_ = viper.BindPFlag(names[0], f)
+			if v == nil {
+				_ = viper.BindPFlag(names[0], f)
+			} else {
+				_ = v.BindPFlag(names[0], f)
+			}
+
 			return true
 		}
 	}
@@ -45,4 +53,11 @@ func fatal(format string, args ...interface{}) {
 
 func output(format string, args ...interface{}) {
 	_, _ = fmt.Fprintf(os.Stdout, format, args...)
+}
+
+func debug(format string, args ...interface{}) {
+	v := viper.GetBool(ParamShortLogVerbose)
+	if v {
+		_, _ = fmt.Fprintf(os.Stdout, format, args...)
+	}
 }

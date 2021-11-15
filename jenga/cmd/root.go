@@ -32,8 +32,11 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.main.yaml)")
 
-	rootCmd.PersistentFlags().StringP("jenga-file", ParamShortJengaFile, "", "Path of jenga")
-	setValue(rootCmd.PersistentFlags(), ParamShortJengaFile, "jenga-file")
+	rootCmd.PersistentFlags().StringP(ParamJengaFile, ParamShortJengaFile, "", "Path of jenga")
+	setValue(nil, rootCmd.PersistentFlags(), ParamShortJengaFile, ParamJengaFile)
+
+	rootCmd.PersistentFlags().BoolP(ParamLogVerbose, ParamShortLogVerbose, false, "output detail")
+	setValue(nil, rootCmd.PersistentFlags(), ParamShortLogVerbose, ParamLogVerbose)
 }
 
 // initConfig reads in config file and ENV variables if set.

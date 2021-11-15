@@ -30,8 +30,9 @@ var listCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		jengaPath := viper.GetString(ParamShortJengaFile)
 		if jengaPath == "" {
-			fatal("jenga path is empty")
+			fatal("Jenga path is empty, add jenga with flags: -j or --jenga-file")
 		}
+		debug("Jenga file: %s\n", jengaPath)
 		blks := jenga.NewJenga(jengaPath, jenga.V2())
 		err := blks.Open(jenga.OpFlagReadOnly)
 		if err != nil {

@@ -19,21 +19,26 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/xfali/jenga"
+	"io/fs"
 	"os"
+	"path/filepath"
 )
 
+var addViper = viper.New()
 // addCmd represents the add command
 var addCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Add file to jenga",
 	Run: func(cmd *cobra.Command, args []string) {
 		jengaPath := viper.GetString(ParamShortJengaFile)
-		source := viper.GetString(ParamSourceFile)
+		key := addViper.GetString(ParamGetKey)
+		source := addViper.GetString(ParamSourceFile)
 		if jengaPath == "" {
-			fatal("jenga path is empty")
+			fatal("Jenga path is empty, add jenga with flags: -j or --jenga-file")
 		}
+		debug("Jenga file: %s\n", jengaPath)
 		if source == "" {
-			fatal("source is empty")
+			fatal("Source is empty, add source path with flags: -s or --source-file")
 		}
 		blks := jenga.NewJenga(jengaPath, jenga.V2Gzip())
 		err := blks.Open(jenga.OpFlagCreate | jenga.OpFlagWriteOnly)
@@ -41,17 +46,62 @@ var addCmd = &cobra.Command{
 			fatal(err.Error())
 		}
 		defer blks.Close()
-		f, err := os.Open(source)
+		info, err := os.Stat(source)
 		if err != nil {
-			fatal(err.Error())
+			fatal("Source %s not exists", source)
 		}
-		defer f.Close()
-		err = blks.Write(source, -1, f)
-		if err != nil {
-			fatal(err.Error())
+		if info.IsDir() {
+			addDir(blks, key, source)
+		} else {
+			if key == "" {
+				key = filepath.Base(source)
+			}
+			addFile(blks, key, source)
 		}
 		os.Exit(0)
 	},
+}
+
+func addDir(j jenga.Jenga, key, source string) {
+	source = filepath.Clean(source)
+	debug("Add dir: key %s dir: %s\n", key, source)
+	err := filepath.Walk(source, func(path string, info fs.FileInfo, err error) error {
+		debug("Visit dir... found file: %s\n", path)
+		var fileKey string
+		if path == source {
+			return nil
+		}
+		fileKey, _ = filepath.Rel(source, path)
+		debug("File rel path: %s\n", fileKey)
+		if key != "" {
+			fileKey = filepath.Join(key, fileKey)
+		}
+		return addFile(j, fileKey, path)
+	})
+	if err != nil {
+		fatal(err.Error())
+	}
+	os.Exit(0)
+}
+
+func addFile(j jenga.Jenga, key string, source string) error {
+	debug("Add file: key %s file path: %s \n", key, source)
+	info, err := os.Stat(source)
+	if err == nil {
+		if info.IsDir() {
+			fatal("File %s is a directory.", source)
+		}
+	}
+	f, err := os.Open(source)
+	if err != nil {
+		fatal(err.Error())
+	}
+	defer f.Close()
+	err = j.Write(key, -1, f)
+	if err != nil {
+		fatal(err.Error())
+	}
+	return nil
 }
 
 func init() {
@@ -59,5 +109,8 @@ func init() {
 
 	fs := addCmd.Flags()
 	fs.StringP(ParamSourceFile, ParamShortSourceFile, "", "Source file to add")
-	setValue(fs, ParamSourceFile, ParamShortSourceFile)
+	setValue(addViper, fs, ParamSourceFile, ParamShortSourceFile)
+
+	fs.StringP(ParamGetKey, ParamShortGetKey, "", "key of data")
+	setValue(addViper, fs, ParamGetKey, ParamShortGetKey)
 }
