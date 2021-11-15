@@ -25,10 +25,8 @@ type blockV1 struct {
 type BlocksV1Opt func(f *blockV1)
 
 func NewV1BlockFile(path string, opts ...BlocksV1Opt) *blockV1 {
-	newOpt := make([]BlocksV1Opt, 0, len(opts)+1)
-	newOpt = append(newOpt, BlockV1Opts.LocalFile(path))
-	newOpt = append(newOpt, opts...)
-	return NewV1Blocks(newOpt...)
+	newOpt := []BlocksV1Opt{BlockV1Opts.LocalFile(path)}
+	return NewV1Blocks(append(newOpt, opts...)...)
 }
 
 func NewV1Blocks(opts ...BlocksV1Opt) *blockV1 {
