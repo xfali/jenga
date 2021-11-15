@@ -19,12 +19,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/xfali/jenga"
-	"io/fs"
 	"os"
 	"path/filepath"
 )
 
 var addViper = viper.New()
+
 // addCmd represents the add command
 var addCmd = &cobra.Command{
 	Use:   "add",
@@ -81,7 +81,10 @@ var addCmd = &cobra.Command{
 func addDir(j jenga.Jenga, key, source string) {
 	source = filepath.Clean(source)
 	debug("Add dir: key %s dir: %s\n", key, source)
-	err := filepath.Walk(source, func(path string, info fs.FileInfo, err error) error {
+	err := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
 		debug("Visit dir... found file: %s\n", path)
 		var fileKey string
 		if path == source {
