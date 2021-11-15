@@ -59,6 +59,9 @@ func (bf *BlkFileV2) Open(flag flags.OpenFlag) error {
 		return errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
 	}
 	f, new, err := bf.opener(flag)
+	if err != nil {
+		return err
+	}
 	bf.file = f
 	if !new {
 		if flag.CanRead() {

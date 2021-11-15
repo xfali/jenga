@@ -19,3 +19,4 @@
 *.blk
 *.db
 *.tar
+/tmp/
