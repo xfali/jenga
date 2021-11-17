@@ -62,7 +62,7 @@ func ReadFileHeader(r io.Reader) (FileHeader, error) {
 	}
 	h.MagicCode = binary.BigEndian.Uint16(buf)
 	if h.MagicCode != BlkFileMagicCode {
-		return h, errors.New("File format not match, maybe broken. ")
+		return h, errors.New("Jenga file format not match, maybe broken. ")
 	}
 	_, err = r.Read(buf)
 	if err != nil {

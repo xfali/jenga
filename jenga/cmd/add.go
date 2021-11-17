@@ -30,7 +30,7 @@ var addCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Add file to jenga",
 	Run: func(cmd *cobra.Command, args []string) {
-		jengaPath := viper.GetString(ParamShortJengaFile)
+		jengaPath := rootViper.GetString(ParamJengaFile)
 		key := addViper.GetString(ParamGetKey)
 		source := addViper.GetString(ParamSourceFile)
 		gzip := addViper.GetBool(ParamJengaGzip)
@@ -38,7 +38,7 @@ var addCmd = &cobra.Command{
 		if jengaPath == "" {
 			fatal("Jenga path is empty, add jenga with flags: -j or --jenga-file")
 		}
-		debug("Jenga file: %s\n", jengaPath)
+		debug("Add to jenga file: %s\n", jengaPath)
 		if source == "" {
 			fatal("Source is empty, add source path with flags: -s or --source-file")
 		}
@@ -47,13 +47,13 @@ var addCmd = &cobra.Command{
 		}
 		var blks jenga.Jenga
 		if gzip {
-			debug("Jenga with compress gzip")
+			debug("Jenga add with compress gzip\n")
 			blks = jenga.NewJenga(jengaPath, jenga.V2Gzip())
 		} else if zlib {
-			debug("Jenga with compress zlib")
+			debug("Jenga add with compress zlib\n")
 			blks = jenga.NewJenga(jengaPath, jenga.V2Zlib())
 		} else {
-			debug("Jenga without compress")
+			debug("Jenga add without compress\n")
 			blks = jenga.NewJenga(jengaPath, jenga.V2())
 		}
 

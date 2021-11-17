@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"github.com/spf13/viper"
 	"github.com/xfali/jenga"
 	"os"
 
@@ -28,7 +27,7 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "list added data keys in jenga file",
 	Run: func(cmd *cobra.Command, args []string) {
-		jengaPath := viper.GetString(ParamShortJengaFile)
+		jengaPath := rootViper.GetString(ParamJengaFile)
 		if jengaPath == "" {
 			fatal("Jenga path is empty, add jenga with flags: -j or --jenga-file")
 		}

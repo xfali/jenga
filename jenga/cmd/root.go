@@ -20,8 +20,11 @@ var rootCmd = &cobra.Command{
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	addFlags(rootCmd)
 	cobra.CheckErr(rootCmd.Execute())
 }
+
+var rootViper = viper.New()
 
 func init() {
 	cobra.OnInitialize(initConfig)
@@ -29,14 +32,21 @@ func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
-
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.main.yaml)")
+}
 
-	rootCmd.PersistentFlags().StringP(ParamJengaFile, ParamShortJengaFile, "", "Path of jenga")
-	setValue(nil, rootCmd.PersistentFlags(), ParamShortJengaFile, ParamJengaFile)
+func addFlags(root *cobra.Command) {
+	fs := root.PersistentFlags()
+	fs.StringP(ParamJengaFile, ParamShortJengaFile, "", "Path of jenga")
+	setValue(rootViper, fs, ParamJengaFile, ParamShortJengaFile)
 
-	rootCmd.PersistentFlags().BoolP(ParamLogVerbose, ParamShortLogVerbose, false, "output detail")
-	setValue(nil, rootCmd.PersistentFlags(), ParamShortLogVerbose, ParamLogVerbose)
+	fs.BoolP(ParamLogVerbose, ParamShortLogVerbose, false, "output detail")
+	setValue(rootViper, fs, ParamShortLogVerbose, ParamLogVerbose)
+}
+
+func AddTo(root *cobra.Command) {
+	addFlags(root)
+	root.AddCommand(rootCmd)
 }
 
 // initConfig reads in config file and ENV variables if set.

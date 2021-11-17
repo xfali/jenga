@@ -60,7 +60,7 @@ func output(format string, args ...interface{}) {
 }
 
 func debug(format string, args ...interface{}) {
-	v := viper.GetBool(ParamShortLogVerbose)
+	v := rootViper.GetBool(ParamShortLogVerbose)
 	if v {
 		_, _ = fmt.Fprintf(os.Stdout, format, args...)
 	}

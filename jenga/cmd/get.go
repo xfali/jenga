@@ -30,13 +30,13 @@ var getCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Get specify data(file) by key from jenga file",
 	Run: func(cmd *cobra.Command, args []string) {
-		jengaPath := viper.GetString(ParamShortJengaFile)
+		jengaPath := rootViper.GetString(ParamJengaFile)
 		key := getViper.GetString(ParamGetKey)
 		dest := getViper.GetString(ParamTargetFile)
 		if jengaPath == "" {
 			fatal("Jenga path is empty, add jenga with flags: -j or --jenga-file")
 		}
-		debug("Jenga file: %s\n", jengaPath)
+		debug("Get data from jenga file: %s\n", jengaPath)
 		if dest == "" {
 			fatal("Target is empty, add target with flags: -f or --target-file")
 		}
@@ -85,7 +85,7 @@ func getFile(j jenga.Jenga, key string, target string) {
 	debug("Get file: key %s file to %s\n", key, target)
 	_, err := os.Stat(target)
 	if err == nil {
-		fatal("File exist: %s", target)
+		fatal("Get file failed, file %s is exists", target)
 	}
 	f, err := os.OpenFile(target, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
