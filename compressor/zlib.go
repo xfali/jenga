@@ -10,15 +10,28 @@ import (
 	"io"
 )
 
-const(
+const (
 	TypeZlib = 2
 )
 
 type zlibCompressor struct {
+	buf []byte
 }
 
-func NewZlibCompressor() *zlibCompressor {
-	return &zlibCompressor{}
+type ZlibOpt func(c *zlibCompressor)
+
+func NewZlibCompressor(opts ...ZlibOpt) *zlibCompressor {
+	ret := &zlibCompressor{}
+
+	for _, opt := range opts {
+		opt(ret)
+	}
+
+	if ret.buf == nil {
+		ret.buf = make([]byte, DefaultBufferSize)
+	}
+
+	return ret
 }
 
 // 压缩类型
@@ -43,7 +56,7 @@ func (c *zlibCompressor) Compress(dstWriter io.Writer, srcReader io.Reader) (bef
 		}
 		after = w.Size()
 	}()
-	before, err = io.Copy(z, r)
+	before, err = io.CopyBuffer(z, r, c.buf)
 	return
 }
 
@@ -67,6 +80,22 @@ func (c *zlibCompressor) Decompress(dstWriter io.Writer, srcReader io.Reader) (b
 		}
 		before = r.Size()
 	}()
-	after, err = io.Copy(w, z)
+	after, err = io.CopyBuffer(w, z, c.buf)
 	return
+}
+
+type zlibOpts struct{}
+
+var ZlibOpts zlibOpts
+
+func (opt zlibOpts) WithBuffer(buf []byte) ZlibOpt {
+	return func(c *zlibCompressor) {
+		c.buf = buf
+	}
+}
+
+func (opt zlibOpts) BufferSize(size int) ZlibOpt {
+	return func(c *zlibCompressor) {
+		c.buf = make([]byte, size)
+	}
 }

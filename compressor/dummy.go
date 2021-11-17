@@ -18,6 +18,9 @@ type bufferCompressor struct {
 }
 
 func NewBufferCompressor(size int) *bufferCompressor {
+	if size <= 0 {
+		size = DefaultBufferSize
+	}
 	return &bufferCompressor{
 		buf: make([]byte, size),
 	}

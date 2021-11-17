@@ -10,24 +10,36 @@ import (
 	"io"
 )
 
-const(
+const (
 	TypeGzip = 1
+
+	NoCompression      GzipCompressLevel = gzip.NoCompression
+	BestSpeed          GzipCompressLevel = gzip.BestSpeed
+	BestCompression    GzipCompressLevel = gzip.BestCompression
+	DefaultCompression GzipCompressLevel = gzip.DefaultCompression
+	HuffmanOnly        GzipCompressLevel = gzip.HuffmanOnly
 )
 
+type GzipCompressLevel int
+
 type gzipCompressor struct {
-	level int
+	level GzipCompressLevel
+	buf   []byte
 }
 
-func NewGzipCompressor() *gzipCompressor {
-	return &gzipCompressor{
-		level: gzip.DefaultCompression,
-	}
-}
+type GzipOpt func(c *gzipCompressor)
 
-func NewGzipCompressorWithLevel(compressLevel int) *gzipCompressor {
-	return &gzipCompressor{
-		level: compressLevel,
+func NewGzipCompressor(opts ...GzipOpt) *gzipCompressor {
+	ret := &gzipCompressor{
+		level: DefaultCompression,
 	}
+	for _, opt := range opts {
+		opt(ret)
+	}
+	if ret.buf == nil {
+		ret.buf = make([]byte, DefaultBufferSize)
+	}
+	return ret
 }
 
 // 压缩类型
@@ -43,7 +55,7 @@ func (c *gzipCompressor) Type() Type {
 // 返回err：发生错误时返回，无错误返回nil
 func (c *gzipCompressor) Compress(dstWriter io.Writer, srcReader io.Reader) (before int64, after int64, err error) {
 	w := NewSizeWriter(dstWriter)
-	z, err := gzip.NewWriterLevel(w, c.level)
+	z, err := gzip.NewWriterLevel(w, int(c.level))
 	if err != nil {
 		return 0, 0, err
 	}
@@ -54,7 +66,7 @@ func (c *gzipCompressor) Compress(dstWriter io.Writer, srcReader io.Reader) (bef
 		}
 		after = w.Size()
 	}()
-	before, err = io.Copy(z, srcReader)
+	before, err = io.CopyBuffer(z, srcReader, c.buf)
 	return
 }
 
@@ -77,6 +89,28 @@ func (c *gzipCompressor) Decompress(dstWriter io.Writer, srcReader io.Reader) (b
 		}
 		before = r.Size()
 	}()
-	after, err = io.Copy(dstWriter, z)
+	after, err = io.CopyBuffer(dstWriter, z, c.buf)
 	return
+}
+
+type gzipOpts struct{}
+
+var GzipOpts gzipOpts
+
+func (opt gzipOpts) WithBuffer(buf []byte) GzipOpt {
+	return func(c *gzipCompressor) {
+		c.buf = buf
+	}
+}
+
+func (opt gzipOpts) BufferSize(size int) GzipOpt {
+	return func(c *gzipCompressor) {
+		c.buf = make([]byte, size)
+	}
+}
+
+func (opt gzipOpts) Level(level GzipCompressLevel) GzipOpt {
+	return func(c *gzipCompressor) {
+		c.level = level
+	}
 }
