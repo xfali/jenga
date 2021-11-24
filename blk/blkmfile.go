@@ -30,7 +30,9 @@ func NewV1BlockFile(path string, opts ...BlocksV1Opt) *blockV1 {
 }
 
 func NewV1Blocks(opts ...BlocksV1Opt) *blockV1 {
-	ret := &blockV1{}
+	ret := &blockV1{
+		sizeFunc: GetFileSize,
+	}
 	for _, opt := range opts {
 		opt(ret)
 	}
@@ -172,7 +174,24 @@ type blockV1Opts struct{}
 
 var BlockV1Opts blockV1Opts
 
-func (opts blockV1Opts) WithSizeFun(sizeFunc GetSizeFunc) BlocksV1Opt {
+type KeySize struct {
+	Key  string
+	Size int64
+}
+
+func (opts blockV1Opts) WithKeySizes(ks ...KeySize) BlocksV1Opt {
+	m := map[string]int64{}
+	for _, v := range ks {
+		m[v.Key] = v.Size
+	}
+	return func(f *blockV1) {
+		f.sizeFunc = func(s string) int64 {
+			return m[s]
+		}
+	}
+}
+
+func (opts blockV1Opts) WithSizeFunc(sizeFunc GetSizeFunc) BlocksV1Opt {
 	return func(f *blockV1) {
 		f.sizeFunc = sizeFunc
 	}
@@ -180,14 +199,16 @@ func (opts blockV1Opts) WithSizeFun(sizeFunc GetSizeFunc) BlocksV1Opt {
 
 func (opts blockV1Opts) FileKey() BlocksV1Opt {
 	return func(f *blockV1) {
-		f.sizeFunc = func(s string) int64 {
-			info, err := os.Stat(s)
-			if err != nil {
-				return 0
-			}
-			return info.Size()
-		}
+		f.sizeFunc = GetFileSize
 	}
+}
+
+func GetFileSize(s string) int64 {
+	info, err := os.Stat(s)
+	if err != nil {
+		return 0
+	}
+	return info.Size()
 }
 
 func (opts blockV1Opts) WithBlkFile(bf *BlkFile) BlocksV1Opt {
