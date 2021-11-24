@@ -61,7 +61,7 @@ func (bf *blockV1) loadMeta(flag flags.OpenFlag) error {
 		}
 	}
 	for {
-		h, err := bf.f.ReadBlock(nil)
+		h, err := bf.f.readBlock(nil)
 		if err != nil {
 			// 最后一个
 			if errors.Is(err, io.EOF) {
@@ -76,7 +76,7 @@ func (bf *blockV1) loadMeta(flag flags.OpenFlag) error {
 				return err
 			}
 		}
-		bf.meta.Store(h.Key, h)
+		bf.meta.Store(h.key, h)
 	}
 }
 
@@ -102,7 +102,10 @@ func (bf *blockV1) ReadFile(path string) (*BlkHeader, error) {
 }
 
 func (bf *blockV1) WriteBlock(header *BlkHeader, reader io.Reader) error {
-	if _, ok := bf.meta.LoadOrStore(header.Key, header); ok {
+	if _, ok := bf.meta.LoadOrStore(header.Key, &blkNode{
+		key:  header.Key,
+		size: header.Size,
+	}); ok {
 		return fmt.Errorf("Block with key %s have been written. ", header.Key)
 	}
 	if header.Size == 0 && reader != nil {
@@ -137,27 +140,27 @@ func (bf *blockV1) Keys() []string {
 
 func (bf *blockV1) ReadBlockByKey(key string, w io.Writer) (int64, error) {
 	if v, ok := bf.meta.Load(key); ok {
-		header := v.(*BlkHeader)
-		if header.Invalid() {
+		node := v.(*blkNode)
+		if node.invalid() {
 			return 0, fmt.Errorf("Block with key: %s not found. ", key)
 		}
-		err := bf.f.seek(header.offset)
+		err := bf.f.seek(node.offset)
 		if err != nil {
 			return 0, err
 		}
 		var n int64
 		if w != nil {
-			r := io.LimitReader(bf.f.file, header.Size)
+			r := io.LimitReader(bf.f.file, node.size)
 			n, err = io.CopyBuffer(w, r, bf.f.buf)
 		} else {
-			n, err = bf.f.file.Seek(header.Size, io.SeekCurrent)
+			n, err = bf.f.file.Seek(node.size, io.SeekCurrent)
 			n = n - bf.f.cur
 		}
 		bf.f.cur += n
 		if err != nil {
 			return n, err
 		}
-		if n != header.Size {
+		if n != node.size {
 			return n, errors.New("Read size is not match then Header Size! ")
 		}
 		return n, nil

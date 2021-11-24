@@ -11,6 +11,7 @@ import (
 	"github.com/xfali/jenga/blk"
 	"github.com/xfali/jenga/compressor"
 	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -180,6 +181,8 @@ func TestBlkMFileV2(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		info, _ := os.Stat("./test.json")
+		t.Log("size:", info.Size())
 		err = f.WriteFile("./test.json")
 		if err == nil {
 			t.Fatal("cannot write same file")
@@ -192,6 +195,8 @@ func TestBlkMFileV2(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer f.Close()
+		info, _ := os.Stat("./test2.json")
+		t.Log("size:", info.Size())
 		err = f.WriteFile("./test2.json")
 		if err != nil {
 			t.Fatal(err)

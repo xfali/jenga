@@ -225,7 +225,19 @@ func (bf *BlkFileV2) seek(offset int64) error {
 }
 
 func (bf *BlkFileV2) ReadBlock(w io.Writer) (*BlkHeader, error) {
-	header := &BlkHeader{}
+	n, err := bf.readBlock(w)
+	if err != nil {
+		return nil, err
+	} else {
+		return &BlkHeader{
+			Key:  n.key,
+			Size: n.originSize,
+		}, nil
+	}
+}
+
+func (bf *BlkFileV2) readBlock(w io.Writer) (*blkNode, error) {
+	node := &blkNode{}
 
 	vi := VarInt{}
 	b, rn, err := vi.LoadFromReader(bf.file)
@@ -246,32 +258,32 @@ func (bf *BlkFileV2) ReadBlock(w io.Writer) (*BlkHeader, error) {
 	if rn != int(size) {
 		return nil, errors.New("Read key length is not match record size! ")
 	}
-	header.Key = string(buf)
+	node.key = string(buf)
 	buf = make([]byte, 8)
 	rn, err = bf.file.Read(buf)
 	bf.cur += int64(rn)
 	if err != nil {
 		return nil, err
 	}
-	header.Size = int64(binary.BigEndian.Uint64(buf))
-	header.offset = bf.cur
+	node.size = int64(binary.BigEndian.Uint64(buf))
+	node.offset = bf.cur
 	var n int64
 	if w != nil {
-		r := io.LimitReader(bf.file, header.Size)
-		n, _, err = bf.compressor.Decompress(w, r)
+		r := io.LimitReader(bf.file, node.size)
+		n, node.originSize, err = bf.compressor.Decompress(w, r)
 	} else {
-		n, err = bf.file.Seek(header.Size, io.SeekCurrent)
+		n, err = bf.file.Seek(node.size, io.SeekCurrent)
 		n = n - bf.cur
 	}
 	bf.cur += n
 	if err != nil {
 		return nil, err
 	}
-	if n != header.Size {
+	if n != node.size {
 		return nil, errors.New("Read size is not match the Header Size! ")
 	}
 
-	return header, nil
+	return node, nil
 }
 
 func (bf *BlkFileV2) Flush() error {

@@ -91,7 +91,8 @@ func TestJengaV2(t *testing.T) {
 			t.Log(v)
 		}
 		b := &strings.Builder{}
-		_, err = blks.Read(testFile, b)
+		n, err := blks.Read(testFile, b)
+		t.Log(n)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -92,9 +92,11 @@ func getFile(j jenga.Jenga, key string, target string) {
 		fatal(err.Error())
 	}
 	defer f.Close()
-	_, err = j.Read(key, f)
+	n, err := j.Read(key, f)
 	if err != nil {
 		fatal(err.Error())
+	} else {
+		debug("Get file: %s success, size: %d\n", target, n)
 	}
 }
 

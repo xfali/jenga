@@ -116,10 +116,11 @@ func addFile(j jenga.Jenga, key string, source string) error {
 		fatal(err.Error())
 	}
 	defer f.Close()
-	err = j.Write(key, -1, f)
+	err = j.Write(key, info.Size(), f)
 	if err != nil {
 		fatal(err.Error())
 	}
+	debug("Add File: %s success, size: %d\n", source, info.Size())
 	return nil
 }
 

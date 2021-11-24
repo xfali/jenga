@@ -25,16 +25,30 @@ type BlkHeader struct {
 
 	// block size
 	Size int64
+}
 
-	// block offset
+type blkNode struct {
+	// node key(name)
+	key string
+
+	// node size
+	size int64
+
+	// blk origin size without compress
+	originSize int64
+
+	// node offset
 	offset int64
+}
+
+func (h *blkNode) invalid() bool {
+	return h.size == 0
 }
 
 func NewBlkHeader(key string, size int64) *BlkHeader {
 	return &BlkHeader{
-		Key:    key,
-		Size:   size,
-		offset: BlkHeaderUnknownOffset,
+		Key:  key,
+		Size: size,
 	}
 }
 

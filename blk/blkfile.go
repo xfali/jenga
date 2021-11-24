@@ -173,7 +173,18 @@ func (bf *BlkFile) seek(offset int64) error {
 }
 
 func (bf *BlkFile) ReadBlock(w io.Writer) (*BlkHeader, error) {
-	header := &BlkHeader{}
+	n, err := bf.readBlock(w)
+	if err == nil {
+		return &BlkHeader{
+			Key:  n.key,
+			Size: n.size,
+		}, nil
+	}
+	return nil, err
+}
+
+func (bf *BlkFile) readBlock(w io.Writer) (*blkNode, error) {
+	header := &blkNode{}
 
 	vi := VarInt{}
 	b, rn, err := vi.LoadFromReader(bf.file)
@@ -194,28 +205,28 @@ func (bf *BlkFile) ReadBlock(w io.Writer) (*BlkHeader, error) {
 	if rn != int(size) {
 		return nil, errors.New("Read key length is not match record size! ")
 	}
-	header.Key = string(buf)
+	header.key = string(buf)
 	vi = VarInt{}
 	b, rn, err = vi.LoadFromReader(bf.file)
 	bf.cur += int64(rn)
 	if err != nil {
 		return nil, err
 	}
-	header.Size = vi.ToInt()
+	header.size = vi.ToInt()
 	header.offset = bf.cur
 	var n int64
 	if w != nil {
-		r := io.LimitReader(bf.file, header.Size)
+		r := io.LimitReader(bf.file, header.size)
 		n, err = io.CopyBuffer(w, r, bf.buf)
 	} else {
-		n, err = bf.file.Seek(header.Size, io.SeekCurrent)
+		n, err = bf.file.Seek(header.size, io.SeekCurrent)
 		n = n - bf.cur
 	}
 	bf.cur += n
 	if err != nil {
 		return nil, err
 	}
-	if n != header.Size {
+	if n != header.size {
 		return nil, errors.New("Read size is not match the Header Size! ")
 	}
 
