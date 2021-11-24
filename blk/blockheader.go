@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	BlkFileMagicCode       uint16 = 0xB1EF
-	BlkFileHeadSize               = 8
+	BlkFileMagicCode       uint32 = 0xB1EF0523
+	BlkFileHeadSize               = 10
 	BlkFileBufferSize             = 32 * 1024
 	BlkHeaderUnknownOffset        = -1
 )
@@ -61,7 +61,7 @@ func (h *BlkHeader) Invalid() bool {
 }
 
 type FileHeader struct {
-	MagicCode  uint16
+	MagicCode  uint32
 	Version    uint16
 	DataFormat uint16
 	Reverse    uint16
@@ -69,15 +69,16 @@ type FileHeader struct {
 
 func ReadFileHeader(r io.Reader) (FileHeader, error) {
 	h := FileHeader{}
-	buf := make([]byte, 2)
+	buf := make([]byte, 4)
 	_, err := r.Read(buf)
 	if err != nil {
 		return h, err
 	}
-	h.MagicCode = binary.BigEndian.Uint16(buf)
+	h.MagicCode = binary.BigEndian.Uint32(buf)
 	if h.MagicCode != BlkFileMagicCode {
 		return h, errors.New("Jenga file format not match, maybe broken. ")
 	}
+	buf = buf[:2]
 	_, err = r.Read(buf)
 	if err != nil {
 		return h, err
@@ -99,12 +100,13 @@ func ReadFileHeader(r io.Reader) (FileHeader, error) {
 }
 
 func WriteFileHeader(h FileHeader, w io.Writer) error {
-	buf := make([]byte, 2)
-	binary.BigEndian.PutUint16(buf, BlkFileMagicCode)
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, BlkFileMagicCode)
 	_, err := w.Write(buf)
 	if err != nil {
 		return err
 	}
+	buf = buf[:2]
 	binary.BigEndian.PutUint16(buf, h.Version)
 	_, err = w.Write(buf)
 	if err != nil {
