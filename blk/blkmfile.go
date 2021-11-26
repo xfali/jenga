@@ -7,8 +7,8 @@ package jengablk
 
 import (
 	"errors"
-	"fmt"
 	"github.com/xfali/jenga/flags"
+	"github.com/xfali/jenga/jengaerr"
 	"io"
 	"os"
 	"sync"
@@ -44,7 +44,7 @@ func NewV1Blocks(opts ...BlocksV1Opt) *blockV1 {
 
 func (bf *blockV1) Open(flag flags.OpenFlag) error {
 	if flag.CanWrite() && flag.CanRead() {
-		return errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
+		return jengaerr.OpenRWFlagError.Format("BlockV1")
 	}
 	err := bf.f.Open(flag)
 	if err != nil {
@@ -106,9 +106,9 @@ func (bf *blockV1) WriteBlock(header *BlkHeader, reader io.Reader) error {
 		key:  header.Key,
 		size: header.Size,
 	}); ok {
-		return fmt.Errorf("Block with key %s have been written. ", header.Key)
+		return jengaerr.WriteExistKeyError.Format(header.Key)
 	}
-	if header.Size == 0 && reader != nil {
+	if header.Size <= 0 && reader != nil {
 		if bf.sizeFunc != nil {
 			size := bf.sizeFunc(header.Key)
 			if size > 0 {
@@ -116,7 +116,7 @@ func (bf *blockV1) WriteBlock(header *BlkHeader, reader io.Reader) error {
 				return bf.f.WriteBlock(header, reader)
 			}
 		}
-		return fmt.Errorf("Block with key %s size is 0. ", header.Key)
+		return jengaerr.WriteWithoutSizeFuncError.Format("BlockV1")
 	}
 	return bf.f.WriteBlock(header, reader)
 }
@@ -142,7 +142,7 @@ func (bf *blockV1) ReadBlockByKey(key string, w io.Writer) (int64, error) {
 	if v, ok := bf.meta.Load(key); ok {
 		node := v.(*blkNode)
 		if node.invalid() {
-			return 0, fmt.Errorf("Block with key: %s not found. ", key)
+			return 0, jengaerr.ReadKeyNotFoundError.Format(key)
 		}
 		err := bf.f.seek(node.offset)
 		if err != nil {
@@ -161,11 +161,11 @@ func (bf *blockV1) ReadBlockByKey(key string, w io.Writer) (int64, error) {
 			return n, err
 		}
 		if n != node.size {
-			return n, errors.New("Read size is not match then Header Size! ")
+			return n, jengaerr.ReadNodeSizeNotMatchError
 		}
 		return n, nil
 	} else {
-		return 0, fmt.Errorf("Block with key: %s not found. ", key)
+		return 0, jengaerr.ReadKeyNotFoundError.Format(key)
 	}
 }
 

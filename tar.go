@@ -8,7 +8,7 @@ package jenga
 import (
 	"archive/tar"
 	"errors"
-	"fmt"
+	"github.com/xfali/jenga/jengaerr"
 	"io"
 	"os"
 	"path/filepath"
@@ -30,7 +30,7 @@ func NewTar(tarPath string) *tarJenga {
 
 func (jenga *tarJenga) Open(flag OpenFlag) error {
 	if flag.CanWrite() && flag.CanRead() {
-		return errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
+		return jengaerr.OpenRWFlagError.Format("Tar")
 	}
 	jenga.flag = flag
 
@@ -50,7 +50,7 @@ func (jenga *tarJenga) Open(flag OpenFlag) error {
 			}
 			if _, err = f.Seek(-1024, io.SeekEnd); err != nil {
 				_ = f.Close()
-				return OpenError
+				return jengaerr.OpenJengaError
 			}
 			jenga.file = f
 			jenga.w = tar.NewWriter(jenga.file)
@@ -67,7 +67,7 @@ func (jenga *tarJenga) Open(flag OpenFlag) error {
 			return nil
 		}
 	}
-	return OpenError
+	return jengaerr.OpenJengaError
 }
 
 func (jenga *tarJenga) KeyList() []string {
@@ -90,36 +90,36 @@ func (jenga *tarJenga) KeyList() []string {
 
 func (jenga *tarJenga) Write(path string, size int64, r io.Reader) error {
 	if !jenga.flag.CanWrite() {
-		return WriteFlagError
+		return jengaerr.WriteFlagError
 	}
 	if info, err := os.Stat(path); err == nil {
 		hdr, err := tar.FileInfoHeader(info, "")
 		if err != nil {
-			return WriteFailedError
+			return jengaerr.WriteFailedError
 		}
 		err = jenga.w.WriteHeader(hdr)
 		if err != nil {
-			return WriteFailedError
+			return jengaerr.WriteFailedError
 		}
 		file, err := os.Open(path)
 		if err != nil {
-			return WriteFailedError
+			return jengaerr.WriteFailedError
 		}
 		defer file.Close()
 
 		_, err = io.Copy(jenga.w, file)
 		if err != nil {
-			return WriteFailedError
+			return jengaerr.WriteFailedError
 		}
 		return nil
 	} else {
-		return fmt.Errorf("File %s not exists. ", path)
+		return jengaerr.TarNotExistsError.Format(path)
 	}
 }
 
 func (jenga *tarJenga) Read(path string, w io.Writer) (int64, error) {
 	if !jenga.flag.CanRead() {
-		return 0, ReadFlagError
+		return 0, jengaerr.ReadFlagError
 	}
 	r := tar.NewReader(jenga.file)
 	path = filepath.Base(path)
@@ -127,7 +127,7 @@ func (jenga *tarJenga) Read(path string, w io.Writer) (int64, error) {
 		h, err := r.Next()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				return 0, fmt.Errorf("Cannot found file: %s. ", path)
+				return 0, jengaerr.TarReadFileNotFoundError.Format(path)
 			} else {
 				return 0, err
 			}
@@ -135,7 +135,7 @@ func (jenga *tarJenga) Read(path string, w io.Writer) (int64, error) {
 		if h.Name == path {
 			n, err := io.Copy(w, r)
 			if err != nil {
-				return n, ReadFailedError
+				return n, jengaerr.ReadFailedError
 			}
 			return n, nil
 		}

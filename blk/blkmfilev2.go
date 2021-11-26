@@ -7,9 +7,9 @@ package jengablk
 
 import (
 	"errors"
-	"fmt"
 	"github.com/xfali/jenga/compressor"
 	"github.com/xfali/jenga/flags"
+	"github.com/xfali/jenga/jengaerr"
 	"io"
 	"os"
 	"sync"
@@ -40,7 +40,7 @@ func NewV2Blocks(opts ...BlocksV2Opt) *blockV2 {
 
 func (bf *blockV2) Open(flag flags.OpenFlag) error {
 	if flag.CanWrite() && flag.CanRead() {
-		return errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
+		return jengaerr.OpenRWFlagError.Format("BlockV2")
 	}
 	err := bf.f.Open(flag)
 	if err != nil {
@@ -102,7 +102,7 @@ func (bf *blockV2) WriteBlock(header *BlkHeader, reader io.Reader) error {
 		key:  header.Key,
 		size: header.Size,
 	}); ok {
-		return fmt.Errorf("Block with key %s have been written. ", header.Key)
+		return jengaerr.WriteExistKeyError.Format(header.Key)
 	}
 	return bf.f.WriteBlock(header, reader)
 }
@@ -128,7 +128,7 @@ func (bf *blockV2) ReadBlockByKey(key string, w io.Writer) (int64, error) {
 	if v, ok := bf.meta.Load(key); ok {
 		node := v.(*blkNode)
 		if node.invalid() {
-			return 0, fmt.Errorf("Block with key: %s not found. ", key)
+			return 0, jengaerr.ReadKeyNotFoundError.Format(key)
 		}
 		err := bf.f.seek(node.offset)
 		if err != nil {
@@ -147,11 +147,11 @@ func (bf *blockV2) ReadBlockByKey(key string, w io.Writer) (int64, error) {
 			return node.originSize, err
 		}
 		if n != node.size {
-			return node.originSize, errors.New("Read size is not match then Header Size! ")
+			return node.originSize, jengaerr.ReadNodeSizeNotMatchError
 		}
 		return node.originSize, nil
 	} else {
-		return 0, fmt.Errorf("Block with key: %s not found. ", key)
+		return 0, jengaerr.ReadKeyNotFoundError.Format(key)
 	}
 }
 

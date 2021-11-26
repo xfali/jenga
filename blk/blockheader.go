@@ -7,8 +7,8 @@ package jengablk
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
+	"github.com/xfali/jenga/jengaerr"
 	"io"
 )
 
@@ -76,7 +76,7 @@ func ReadFileHeader(r io.Reader) (FileHeader, error) {
 	}
 	h.MagicCode = binary.BigEndian.Uint32(buf)
 	if h.MagicCode != BlkFileMagicCode {
-		return h, errors.New("Jenga file format not match, maybe broken. ")
+		return h, jengaerr.JengaBrokenError
 	}
 	buf = buf[:2]
 	_, err = r.Read(buf)

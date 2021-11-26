@@ -6,9 +6,8 @@
 package jengablk
 
 import (
-	"errors"
-	"fmt"
 	"github.com/xfali/jenga/flags"
+	"github.com/xfali/jenga/jengaerr"
 	"io"
 	"os"
 )
@@ -44,7 +43,7 @@ func NewBlkFileWithOpener(opener Opener) *BlkFile {
 
 func (bf *BlkFile) Open(flag flags.OpenFlag) error {
 	if flag.CanWrite() && flag.CanRead() {
-		return errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
+		return jengaerr.OpenRWFlagError.Format("BlockV1")
 	}
 	f, new, err := bf.opener(flag)
 	if err != nil {
@@ -82,7 +81,7 @@ func (bf *BlkFile) Open(flag flags.OpenFlag) error {
 		}
 	}
 	_ = f.Close()
-	return fmt.Errorf("Cannot open with flag %d. ", flag)
+	return jengaerr.OpenFlagError.Format(flag)
 }
 
 func (bf *BlkFile) Close() error {
@@ -105,7 +104,7 @@ func (bf *BlkFile) readHeader() error {
 		return err
 	}
 	if h.Version != BlkFileVersion {
-		return fmt.Errorf("Version: %d not support, [BlkFile] expect: %d. ", h.Version, BlkFileVersion)
+		return jengaerr.VersionNotSupportError.Format(h.Version, "BlkFile", BlkFileVersion)
 	}
 	bf.version = h.Version
 	return err
@@ -158,7 +157,7 @@ func (bf *BlkFile) WriteBlock(header *BlkHeader, reader io.Reader) error {
 		return err
 	}
 	if n != header.Size {
-		return errors.New("Write size is not match then Header Size! ")
+		return jengaerr.WriteSizeNotMatchError
 	}
 	return nil
 }
@@ -193,7 +192,7 @@ func (bf *BlkFile) readBlock(w io.Writer) (*blkNode, error) {
 		return nil, err
 	}
 	if !b {
-		return nil, errors.New("Cannot parse varint. ")
+		return nil, jengaerr.ReadBlockVarintFailedError
 	}
 	size := vi.ToUint()
 	buf := make([]byte, size)
@@ -203,7 +202,7 @@ func (bf *BlkFile) readBlock(w io.Writer) (*blkNode, error) {
 		return nil, err
 	}
 	if rn != int(size) {
-		return nil, errors.New("Read key length is not match record size! ")
+		return nil, jengaerr.ReadKeySizeNotMatchError
 	}
 	header.key = string(buf)
 	vi = VarInt{}
@@ -227,7 +226,7 @@ func (bf *BlkFile) readBlock(w io.Writer) (*blkNode, error) {
 		return nil, err
 	}
 	if n != header.size {
-		return nil, errors.New("Read size is not match the Header Size! ")
+		return nil, jengaerr.ReadNodeSizeNotMatchError
 	}
 
 	return header, nil
@@ -244,7 +243,7 @@ var BlkFileOpeners blkFileOpeners
 func (o blkFileOpeners) Local(path string) Opener {
 	return func(flag flags.OpenFlag) (BlockReadWriter, bool, error) {
 		if flag.CanWrite() && flag.CanRead() {
-			return nil, false, errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
+			return nil, false, jengaerr.OpenRWFlagError.Format("File")
 		}
 		_, err := os.Stat(path)
 		if err == nil {
@@ -261,6 +260,6 @@ func (o blkFileOpeners) Local(path string) Opener {
 				return f, true, err
 			}
 		}
-		return nil, false, fmt.Errorf("Cannot open file %s with flag %d. ", path, flag)
+		return nil, false, jengaerr.OpenFileError.Format(path, flag)
 	}
 }

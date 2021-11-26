@@ -7,10 +7,9 @@ package jengablk
 
 import (
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"github.com/xfali/jenga/compressor"
 	"github.com/xfali/jenga/flags"
+	"github.com/xfali/jenga/jengaerr"
 	"io"
 	"os"
 )
@@ -56,7 +55,7 @@ func (bf *BlkFileV2) WithCompressor(compressor compressor.Compressor) *BlkFileV2
 
 func (bf *BlkFileV2) Open(flag flags.OpenFlag) error {
 	if flag.CanWrite() && flag.CanRead() {
-		return errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
+		return jengaerr.OpenRWFlagError.Format("BlockV2")
 	}
 	f, new, err := bf.opener(flag)
 	if err != nil {
@@ -99,7 +98,7 @@ func (bf *BlkFileV2) Open(flag flags.OpenFlag) error {
 		}
 	}
 	_ = f.Close()
-	return fmt.Errorf("Cannot open with flag %d. ", flag)
+	return jengaerr.OpenFlagError.Format(flag)
 }
 
 func (bf *BlkFileV2) Close() error {
@@ -133,7 +132,7 @@ func (bf *BlkFileV2) selectCompressor() error {
 			bf.compressor = compressor.NewZlibCompressor()
 		}
 	default:
-		return fmt.Errorf("Cannot support format type: %d. ", bf.header.DataFormat)
+		return jengaerr.DataFormatNotSupportError.Format(bf.header.DataFormat)
 	}
 	return nil
 }
@@ -144,7 +143,7 @@ func (bf *BlkFileV2) readHeader() error {
 		return err
 	}
 	if h.Version != BlkFileV2Version {
-		return fmt.Errorf("Version: %d not support, [BlkFileV2] expect: %d. ", h.Version, BlkFileV2Version)
+		return jengaerr.VersionNotSupportError.Format(h.Version, "BlkFileV2", BlkFileV2Version)
 	}
 	bf.header = h
 	return bf.selectCompressor()
@@ -246,7 +245,7 @@ func (bf *BlkFileV2) readBlock(w io.Writer) (*blkNode, error) {
 		return nil, err
 	}
 	if !b {
-		return nil, errors.New("Cannot parse varint. ")
+		return nil, jengaerr.ReadBlockVarintFailedError
 	}
 	size := vi.ToUint()
 	buf := make([]byte, size)
@@ -256,7 +255,7 @@ func (bf *BlkFileV2) readBlock(w io.Writer) (*blkNode, error) {
 		return nil, err
 	}
 	if rn != int(size) {
-		return nil, errors.New("Read key length is not match record size! ")
+		return nil, jengaerr.ReadKeySizeNotMatchError
 	}
 	node.key = string(buf)
 	buf = make([]byte, 8)
@@ -280,7 +279,7 @@ func (bf *BlkFileV2) readBlock(w io.Writer) (*blkNode, error) {
 		return nil, err
 	}
 	if n != node.size {
-		return nil, errors.New("Read size is not match the Header Size! ")
+		return nil, jengaerr.ReadNodeSizeNotMatchError
 	}
 
 	return node, nil
@@ -297,7 +296,7 @@ var BlkFileV2Openers blkFileV2Openers
 func (o blkFileV2Openers) Local(path string) Opener {
 	return func(flag flags.OpenFlag) (BlockReadWriter, bool, error) {
 		if flag.CanWrite() && flag.CanRead() {
-			return nil, false, errors.New("Tar format flag cannot contains both OpFlagReadOnly and OpFlagWriteOnly. ")
+			return nil, false, jengaerr.OpenRWFlagError.Format("File")
 		}
 		_, err := os.Stat(path)
 		if err == nil {
@@ -314,6 +313,6 @@ func (o blkFileV2Openers) Local(path string) Opener {
 				return f, true, err
 			}
 		}
-		return nil, false, fmt.Errorf("Cannot open file %s with flag %d. ", path, flag)
+		return nil, false, jengaerr.OpenFileError.Format(path, flag)
 	}
 }
