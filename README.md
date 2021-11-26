@@ -70,7 +70,7 @@ if err != nil {
 }
 defer blks.Close()
 // reader为要写入数据的io.Reader
-err = blks.Write(key, -1, reader)
+_, err := blks.Write(key, reader)
 if err != nil {
     t.Fatal(err)
 }
