@@ -105,7 +105,7 @@ func (bf *BlkFile) readHeader() error {
 		return err
 	}
 	if h.Version != BlkFileVersion {
-		return fmt.Errorf("Version: %d not support. ", bf.version)
+		return fmt.Errorf("Version: %d not support, [BlkFile] expect: %d. ", h.Version, BlkFileVersion)
 	}
 	bf.version = h.Version
 	return err

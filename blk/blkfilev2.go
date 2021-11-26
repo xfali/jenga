@@ -144,7 +144,7 @@ func (bf *BlkFileV2) readHeader() error {
 		return err
 	}
 	if h.Version != BlkFileV2Version {
-		return fmt.Errorf("Version: %d not support. ", h.Version)
+		return fmt.Errorf("Version: %d not support, [BlkFileV2] expect: %d. ", h.Version, BlkFileV2Version)
 	}
 	bf.header = h
 	return bf.selectCompressor()
