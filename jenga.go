@@ -38,18 +38,18 @@ type Jenga interface {
 
 type Writer interface {
 	// 使用key保存数据
-	// key: 数据关联的key
-	// size: 数据长度，选填0或者实际的长度（根据具体的实现）
-	// r: 写入数据的reader
-	// err: 当出错时返回
-	Write(key string, size int64, r io.Reader) (err error)
+	// param key: 数据关联的key
+	// param r: 写入数据的reader
+	// return size: 写入数据的长度
+	// return err: 当出错时返回
+	Write(key string, r io.Reader) (size int64, err error)
 }
 
 type Reader interface {
 	// 使用key获取数据
-	// key: 数据关联的key
-	// w: 接收数据的writer
-	// size: 读取数据的长度
-	// err: 当出错时返回
+	// param key: 数据关联的key
+	// param w: 接收数据的writer
+	// return size: 读取数据的长度
+	// return err: 当出错时返回
 	Read(key string, w io.Writer) (size int64, err error)
 }

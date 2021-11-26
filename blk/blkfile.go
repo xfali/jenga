@@ -110,14 +110,14 @@ func (bf *BlkFile) readHeader() error {
 	return err
 }
 
-func (bf *BlkFile) WriteFile(path string) error {
+func (bf *BlkFile) WriteFile(path string) (int64, error) {
 	info, err := os.Stat(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer f.Close()
 	return bf.WriteBlock(NewBlkHeader(path, info.Size()), f)
@@ -132,34 +132,34 @@ func (bf *BlkFile) ReadFile(path string) (*BlkHeader, error) {
 	return bf.ReadBlock(f)
 }
 
-func (bf *BlkFile) WriteBlock(header *BlkHeader, reader io.Reader) error {
+func (bf *BlkFile) WriteBlock(header *BlkHeader, reader io.Reader) (int64, error) {
 	length := len(header.Key)
 	vi := VarInt{}
 	vi.InitFromUInt64(uint64(length))
 	wn, err := bf.file.Write(vi.Bytes())
 	bf.cur += int64(wn)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	wn, err = bf.file.Write([]byte(header.Key))
 	bf.cur += int64(wn)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	vi.InitFromUInt64(uint64(header.Size))
 	_, err = bf.file.Write(vi.Bytes())
 	if err != nil {
-		return err
+		return 0, err
 	}
 	n, err := io.CopyBuffer(bf.file, reader, bf.buf)
 	bf.cur += int64(n)
 	if err != nil {
-		return err
+		return n, err
 	}
 	if n != header.Size {
-		return jengaerr.WriteSizeNotMatchError
+		return n, jengaerr.WriteSizeNotMatchError
 	}
-	return nil
+	return n, nil
 }
 
 func (bf *BlkFile) seek(offset int64) error {

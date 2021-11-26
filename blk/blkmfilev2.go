@@ -80,31 +80,30 @@ func (bf *blockV2) Close() error {
 	return bf.f.Close()
 }
 
-func (bf *blockV2) WriteFile(path string) error {
-	info, err := os.Stat(path)
+func (bf *blockV2) WriteFile(path string) (int64, error) {
+	_, err := os.Stat(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer f.Close()
-	return bf.WriteBlock(NewBlkHeader(path, info.Size()), f)
+	return bf.WriteBlock(path, f)
 }
 
 func (bf *blockV2) ReadFile(path string) (*BlkHeader, error) {
 	return bf.f.ReadFile(path)
 }
 
-func (bf *blockV2) WriteBlock(header *BlkHeader, reader io.Reader) error {
-	if _, ok := bf.meta.LoadOrStore(header.Key, &blkNode{
-		key:  header.Key,
-		size: header.Size,
+func (bf *blockV2) WriteBlock(key string, reader io.Reader) (int64, error) {
+	if _, ok := bf.meta.LoadOrStore(key, &blkNode{
+		key: key,
 	}); ok {
-		return jengaerr.WriteExistKeyError.Format(header.Key)
+		return 0, jengaerr.WriteExistKeyError.Format(key)
 	}
-	return bf.f.WriteBlock(header, reader)
+	return bf.f.WriteBlock(key, reader)
 }
 
 func (bf *blockV2) NeedSize() bool {

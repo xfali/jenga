@@ -149,17 +149,17 @@ func (bf *BlkFileV2) readHeader() error {
 	return bf.selectCompressor()
 }
 
-func (bf *BlkFileV2) WriteFile(path string) error {
-	info, err := os.Stat(path)
+func (bf *BlkFileV2) WriteFile(path string) (int64, error) {
+	_, err := os.Stat(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer f.Close()
-	return bf.WriteBlock(NewBlkHeader(path, info.Size()), f)
+	return bf.WriteBlock(path, f)
 }
 
 func (bf *BlkFileV2) ReadFile(path string) (*BlkHeader, error) {
@@ -171,47 +171,47 @@ func (bf *BlkFileV2) ReadFile(path string) (*BlkHeader, error) {
 	return bf.ReadBlock(f)
 }
 
-func (bf *BlkFileV2) WriteBlock(header *BlkHeader, reader io.Reader) error {
-	length := len(header.Key)
+func (bf *BlkFileV2) WriteBlock(key string, reader io.Reader) (int64, error) {
+	length := len(key)
 	vi := VarInt{}
 	vi.InitFromUInt64(uint64(length))
 	wn, err := bf.file.Write(vi.Bytes())
 	bf.cur += int64(wn)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	wn, err = bf.file.Write([]byte(header.Key))
+	wn, err = bf.file.Write([]byte(key))
 	bf.cur += int64(wn)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	cur := bf.cur
 	// write data first,get data length
 	_, err = bf.file.Seek(8, io.SeekCurrent)
 	bf.cur += 8
 	if err != nil {
-		return err
+		return 0, err
 	}
 	// write data
-	_, n, err := bf.compressor.Compress(bf.file, reader)
+	originWn, n, err := bf.compressor.Compress(bf.file, reader)
 	bf.cur += n
 	if err != nil {
-		return err
+		return originWn, err
 	}
 	// seek to size record position
 	_, err = bf.file.Seek(cur, io.SeekStart)
 	if err != nil {
-		return err
+		return originWn, err
 	}
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, uint64(n))
 	_, err = bf.file.Write(buf)
 	if err != nil {
-		return err
+		return originWn, err
 	}
 	// seek to end
 	_, err = bf.file.Seek(bf.cur, io.SeekStart)
-	return err
+	return originWn, err
 }
 
 func (bf *BlkFileV2) seek(offset int64) error {

@@ -84,41 +84,39 @@ func (bf *blockV1) Close() error {
 	return bf.f.Close()
 }
 
-func (bf *blockV1) WriteFile(path string) error {
-	info, err := os.Stat(path)
+func (bf *blockV1) WriteFile(path string) (int64, error) {
+	_, err := os.Stat(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer f.Close()
-	return bf.WriteBlock(NewBlkHeader(path, info.Size()), f)
+	return bf.WriteBlock(path, f)
 }
 
 func (bf *blockV1) ReadFile(path string) (*BlkHeader, error) {
 	return bf.f.ReadFile(path)
 }
 
-func (bf *blockV1) WriteBlock(header *BlkHeader, reader io.Reader) error {
-	if _, ok := bf.meta.LoadOrStore(header.Key, &blkNode{
-		key:  header.Key,
-		size: header.Size,
+func (bf *blockV1) WriteBlock(key string, reader io.Reader) (int64, error) {
+	if _, ok := bf.meta.LoadOrStore(key, &blkNode{
+		key: key,
 	}); ok {
-		return jengaerr.WriteExistKeyError.Format(header.Key)
+		return 0, jengaerr.WriteExistKeyError.Format(key)
 	}
-	if header.Size <= 0 && reader != nil {
-		if bf.sizeFunc != nil {
-			size := bf.sizeFunc(header.Key)
-			if size > 0 {
-				header.Size = size
-				return bf.f.WriteBlock(header, reader)
-			}
-		}
-		return jengaerr.WriteWithoutSizeFuncError.Format("BlockV1")
+
+	if bf.sizeFunc == nil {
+		return 0, jengaerr.WriteWithoutSizeFuncError.Format("BlockV1")
 	}
-	return bf.f.WriteBlock(header, reader)
+	size := bf.sizeFunc(key)
+	if size > 0 {
+		return bf.f.WriteBlock(NewBlkHeader(key, size), reader)
+	} else {
+		return 0, jengaerr.WriteSizeError.Format(size)
+	}
 }
 
 func (bf *blockV1) NeedSize() bool {
@@ -223,6 +221,7 @@ func (opts blockV1Opts) WithBlkFile(bf *BlkFile) BlocksV1Opt {
 func (opts blockV1Opts) LocalFile(path string) BlocksV1Opt {
 	return func(f *blockV1) {
 		f.f = NewBlkFile(path)
+		f.sizeFunc = GetFileSize
 	}
 }
 

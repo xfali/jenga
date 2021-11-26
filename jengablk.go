@@ -48,14 +48,14 @@ func (jenga *blkJenga) KeyList() []string {
 	return jenga.blk.Keys()
 }
 
-func (jenga *blkJenga) Write(path string, size int64, r io.Reader) error {
+func (jenga *blkJenga) Write(key string, r io.Reader) (size int64, err error) {
 	if !jenga.flag.CanWrite() {
-		return jengaerr.WriteFlagError
+		return 0, jengaerr.WriteFlagError
 	}
-	if jenga.blk.NeedSize() && (size <= 0 && r != nil) {
-		return jengaerr.WriteSizeError.Format(size)
-	}
-	return jenga.blk.WriteBlock(jengablk.NewBlkHeader(path, size), r)
+	//if jenga.blk.NeedSize() && (size <= 0 && r != nil) {
+	//	return 0, jengaerr.WriteSizeError.Format(size)
+	//}
+	return jenga.blk.WriteBlock(key, r)
 }
 
 func (jenga *blkJenga) Read(path string, w io.Writer) (int64, error) {

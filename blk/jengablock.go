@@ -23,9 +23,9 @@ type Opener func(flag flags.OpenFlag) (rw BlockReadWriter, new bool, err error)
 type JengaBlocks interface {
 	Open(flag flags.OpenFlag) error
 	Keys() []string
-	WriteBlock(header *BlkHeader, reader io.Reader) error
+	WriteBlock(key string, reader io.Reader) (int64, error)
 	ReadBlock(w io.Writer) (*BlkHeader, error)
-	ReadBlockByKey(path string, writer io.Writer) (int64, error)
+	ReadBlockByKey(key string, writer io.Writer) (int64, error)
 	Close() (err error)
 	NeedSize() bool
 	Flush() error
