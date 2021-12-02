@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	BlkFileMagicCode       uint32 = 0xB1EF0523
+	BlkFileMagicCode       uint32 = 0x58466AFB
 	BlkFileHeadSize               = 10
 	BlkFileBufferSize             = 32 * 1024
 	BlkHeaderUnknownOffset        = -1
