@@ -17,11 +17,12 @@ var (
 	DataFormatNotSupportError = newError(1101, "Cannot support format type: %d. ")
 	VersionNotSupportError    = newError(1102, "Version: %d not support, [%s] expect: %d. ")
 	OpenFileError             = newError(1201, "Cannot open file %s with flag %d. ")
-	
+
 	WriteFlagError            = newError(2001, "Jenga write failed. Need open with OpFlagWriteOnly flag. ")
 	WriteFailedError          = newError(2002, "Jenga write failed. ")
 	WriteSizeNotMatchError    = newError(2003, "Write size is not match then Header Size! ")
 	WriteExistKeyError        = newError(2011, "Block with key %s have been written. ")
+	WriteKeyFilteredError     = newError(2012, "Key is filtered, cannot be add. ")
 	WriteWithoutSizeFuncError = newError(2021, "%s need a block size map function. ")
 	WriteSizeError            = newError(2022, "blkJenga param size %d is Illegal, it must be actual reader data size. ")
 

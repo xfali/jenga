@@ -108,6 +108,9 @@ func (bf *blockV2) ReadFile(path string) (*BlkHeader, error) {
 }
 
 func (bf *blockV2) WriteBlock(key string, reader io.Reader) (int64, error) {
+	if bf.filter != nil && !bf.filter(key) {
+		return 0, jengaerr.WriteKeyFilteredError
+	}
 	if _, ok := bf.meta.LoadOrStore(key, &blkNode{
 		key: key,
 	}); ok {
@@ -214,7 +217,7 @@ func (opts blockV2Opts) WithKeyFilter(filter KeyFilter) BlocksV2Opt {
 	}
 }
 
-func (opts blockV2Opts) WithKeyMatch(regStr string) BlocksV2Opt {
+func (opts blockV2Opts) KeyMatch(regStr string) BlocksV2Opt {
 	return func(f *blockV2) {
 		compile := regexp.MustCompile(regStr)
 		f.filter = compile.MatchString

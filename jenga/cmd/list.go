@@ -39,7 +39,7 @@ var listCmd = &cobra.Command{
 		debug("Jenga file: %s\n", jengaPath)
 		var blks jenga.Jenga
 		if regexp != "" {
-			blks = jenga.NewJenga(jengaPath, jenga.V2(jengablk.BlockV2Opts.WithKeyMatch(regexp)))
+			blks = jenga.NewJenga(jengaPath, jenga.V2(jengablk.BlockV2Opts.KeyMatch(regexp)))
 		} else {
 			blks = jenga.NewJenga(jengaPath, jenga.V2())
 		}
