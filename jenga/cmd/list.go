@@ -16,11 +16,15 @@ limitations under the License.
 package cmd
 
 import (
+	"github.com/spf13/viper"
 	"github.com/xfali/jenga"
+	"github.com/xfali/jenga/blk"
 	"os"
 
 	"github.com/spf13/cobra"
 )
+
+var listViper = viper.New()
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
@@ -28,11 +32,18 @@ var listCmd = &cobra.Command{
 	Short: "list added data keys in jenga file",
 	Run: func(cmd *cobra.Command, args []string) {
 		jengaPath := rootViper.GetString(ParamJengaFile)
+		regexp := listViper.GetString(ParamKeyFilter)
 		if jengaPath == "" {
 			fatal("Jenga path is empty, add jenga with flags: -j or --jenga-file")
 		}
 		debug("Jenga file: %s\n", jengaPath)
-		blks := jenga.NewJenga(jengaPath, jenga.V2())
+		var blks jenga.Jenga
+		if regexp != "" {
+			blks = jenga.NewJenga(jengaPath, jenga.V2(jengablk.BlockV2Opts.WithKeyMatch(regexp)))
+		} else {
+			blks = jenga.NewJenga(jengaPath, jenga.V2())
+		}
+
 		err := blks.Open(jenga.OpFlagReadOnly)
 		if err != nil {
 			fatal(err.Error())
@@ -48,4 +59,7 @@ var listCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(listCmd)
+	fs := listCmd.Flags()
+	fs.StringP(ParamKeyFilter, ParamShortKeyFilter, "", "key filter")
+	setValue(listViper, fs, ParamKeyFilter, ParamShortKeyFilter)
 }

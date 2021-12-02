@@ -30,6 +30,8 @@ const (
 	ParamShortJengaFile  = "j"
 	ParamGetKey          = "key"
 	ParamShortGetKey     = "k"
+	ParamKeyFilter       = "key-regexp"
+	ParamShortKeyFilter  = "x"
 	ParamLogVerbose      = "verbose"
 	ParamShortLogVerbose = "v"
 )

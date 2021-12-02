@@ -12,15 +12,19 @@ import (
 	"github.com/xfali/jenga/jengaerr"
 	"io"
 	"os"
+	"regexp"
 	"sync"
 )
 
 type blockV2 struct {
-	f    *BlkFileV2
-	meta sync.Map
+	f      *BlkFileV2
+	filter KeyFilter
+	meta   sync.Map
 }
 
 type BlocksV2Opt func(f *blockV2)
+
+type KeyFilter func(key string) bool
 
 func NewV2BlockFile(path string, opts ...BlocksV2Opt) *blockV2 {
 	newOpt := []BlocksV2Opt{BlockV2Opts.LocalFile(path)}
@@ -72,7 +76,13 @@ func (bf *blockV2) loadMeta(flag flags.OpenFlag) error {
 				return err
 			}
 		}
-		bf.meta.Store(n.key, n)
+		if bf.filter != nil {
+			if bf.filter(n.key) {
+				bf.meta.Store(n.key, n)
+			}
+		} else {
+			bf.meta.Store(n.key, n)
+		}
 	}
 }
 
@@ -195,5 +205,18 @@ func (opts blockV2Opts) LocalFile(path string) BlocksV2Opt {
 func (opts blockV2Opts) WithOpener(openers Opener) BlocksV2Opt {
 	return func(f *blockV2) {
 		f.f = NewBlkFileV2WithOpener(openers)
+	}
+}
+
+func (opts blockV2Opts) WithKeyFilter(filter KeyFilter) BlocksV2Opt {
+	return func(f *blockV2) {
+		f.filter = filter
+	}
+}
+
+func (opts blockV2Opts) WithKeyMatch(regStr string) BlocksV2Opt {
+	return func(f *blockV2) {
+		compile := regexp.MustCompile(regStr)
+		f.filter = compile.MatchString
 	}
 }
