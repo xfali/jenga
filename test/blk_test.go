@@ -168,7 +168,7 @@ func TestV1BlockFile(t *testing.T) {
 	})
 }
 
-func TestBlkMFileV2(t *testing.T) {
+func TestV2BlockFile(t *testing.T) {
 	_ = compressor.NewGzipCompressor()
 	f := jengablk.NewV2BlockFile("./test.blk", jengablk.BlockV2Opts.WithZlib())
 	t.Run("write1", func(t *testing.T) {

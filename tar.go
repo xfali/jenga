@@ -88,32 +88,37 @@ func (jenga *tarJenga) KeyList() []string {
 	return nil
 }
 
-func (jenga *tarJenga) Write(path string, size int64, r io.Reader) error {
+// 强制同步数据
+func (jenga *tarJenga) Sync() error {
+	return jenga.file.Sync()
+}
+
+func (jenga *tarJenga) Write(path string, r io.Reader) (int64, error) {
 	if !jenga.flag.CanWrite() {
-		return jengaerr.WriteFlagError
+		return 0, jengaerr.WriteFlagError
 	}
 	if info, err := os.Stat(path); err == nil {
 		hdr, err := tar.FileInfoHeader(info, "")
 		if err != nil {
-			return jengaerr.WriteFailedError
+			return 0, jengaerr.WriteFailedError
 		}
 		err = jenga.w.WriteHeader(hdr)
 		if err != nil {
-			return jengaerr.WriteFailedError
+			return 0, jengaerr.WriteFailedError
 		}
 		file, err := os.Open(path)
 		if err != nil {
-			return jengaerr.WriteFailedError
+			return 0, jengaerr.WriteFailedError
 		}
 		defer file.Close()
 
-		_, err = io.Copy(jenga.w, file)
+		n, err := io.Copy(jenga.w, file)
 		if err != nil {
-			return jengaerr.WriteFailedError
+			return n, jengaerr.WriteFailedError
 		}
-		return nil
+		return n, nil
 	} else {
-		return jengaerr.TarNotExistsError.Format(path)
+		return 0, jengaerr.TarNotExistsError.Format(path)
 	}
 }
 

@@ -15,7 +15,7 @@ var (
 	JengaBrokenError          = newError(1003, "Jenga file format not match, maybe broken. ")
 	OpenFlagError             = newError(1004, "Cannot open with flag %d. ")
 	DataFormatNotSupportError = newError(1101, "Cannot support format type: %d. ")
-	VersionNotSupportError    = newError(1102, "Version: %d not support, [%s] expect: %d. ")
+	VersionNotSupportError    = newError(1102, "Version: %d not support, expect version: %d. ")
 	OpenFileError             = newError(1201, "Cannot open file %s with flag %d. ")
 
 	WriteFlagError            = newError(2001, "Jenga write failed. Need open with OpFlagWriteOnly flag. ")

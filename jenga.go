@@ -32,6 +32,9 @@ type Jenga interface {
 	// 获得Key列表
 	KeyList() []string
 
+	// 强制同步数据
+	Sync() error
+
 	Writer
 	Reader
 }

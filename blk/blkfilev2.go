@@ -142,8 +142,8 @@ func (bf *BlkFileV2) readHeader() error {
 	if err != nil {
 		return err
 	}
-	if h.Version != BlkFileV2Version {
-		return jengaerr.VersionNotSupportError.Format(h.Version, "BlkFileV2", BlkFileV2Version)
+	if h.Version != bf.header.Version {
+		return jengaerr.VersionNotSupportError.Format(h.Version, bf.header.Version)
 	}
 	bf.header = h
 	return bf.selectCompressor()
@@ -235,54 +235,85 @@ func (bf *BlkFileV2) ReadBlock(w io.Writer) (*BlkHeader, error) {
 	}
 }
 
-func (bf *BlkFileV2) readBlock(w io.Writer) (*blkNode, error) {
-	node := &blkNode{}
-
+func (bf *BlkFileV2) readKey() (string, error) {
 	vi := VarInt{}
 	b, rn, err := vi.LoadFromReader(bf.file)
 	bf.cur += int64(rn)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if !b {
-		return nil, jengaerr.ReadBlockVarintFailedError
+		return "", jengaerr.ReadBlockVarintFailedError
 	}
 	size := vi.ToUint()
 	buf := make([]byte, size)
 	rn, err = bf.file.Read(buf)
 	bf.cur += int64(rn)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if rn != int(size) {
-		return nil, jengaerr.ReadKeySizeNotMatchError
+		return "", jengaerr.ReadKeySizeNotMatchError
 	}
-	node.key = string(buf)
-	buf = make([]byte, 8)
-	rn, err = bf.file.Read(buf)
+	return string(buf), nil
+}
+
+func (bf *BlkFileV2) readPayloadSize() (int64, error) {
+	buf := make([]byte, 8)
+	rn, err := bf.file.Read(buf)
 	bf.cur += int64(rn)
 	if err != nil {
-		return nil, err
+		return -1, err
 	}
-	node.size = int64(binary.BigEndian.Uint64(buf))
-	node.offset = bf.cur
-	var n int64
+	return int64(binary.BigEndian.Uint64(buf)), nil
+}
+
+func (bf *BlkFileV2) readPayload(w io.Writer, size int64) (int64, error) {
+	var n, originSize int64
+	var err error
 	if w != nil {
-		r := io.LimitReader(bf.file, node.size)
-		n, node.originSize, err = bf.compressor.Decompress(w, r)
+		r := io.LimitReader(bf.file, size)
+		n, originSize, err = bf.compressor.Decompress(w, r)
 	} else {
-		n, err = bf.file.Seek(node.size, io.SeekCurrent)
+		n, err = bf.file.Seek(size, io.SeekCurrent)
 		n = n - bf.cur
 	}
 	bf.cur += n
 	if err != nil {
+		return -1, err
+	}
+	if n != size {
+		return -1, jengaerr.ReadNodeSizeNotMatchError
+	}
+	return originSize, err
+}
+
+func (bf *BlkFileV2) readBlock(w io.Writer) (*blkNode, error) {
+	node := &blkNode{}
+
+	key, err := bf.readKey()
+	if err != nil {
 		return nil, err
 	}
-	if n != node.size {
-		return nil, jengaerr.ReadNodeSizeNotMatchError
+	node.key = key
+
+	size, err := bf.readPayloadSize()
+	if err != nil {
+		return nil, err
+	}
+
+	node.size = size
+	node.offset = bf.current()
+	node.originSize, err = bf.readPayload(w, size)
+	if err != nil {
+		return nil, err
 	}
 
 	return node, nil
+}
+
+func (bf *BlkFileV2) current() int64 {
+	return bf.cur
 }
 
 func (bf *BlkFileV2) Flush() error {

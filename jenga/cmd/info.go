@@ -34,7 +34,7 @@ var info = &cobra.Command{
 		}
 		output("Version:\t%d\n", h.Version)
 		output("Data format:\t%d (%s)\n", h.DataFormat, compressor.GetName(h.DataFormat))
-		output("Reverse:\t%d\n", h.Reverse)
+		output("Reserve:\t%d\n", h.Reserve)
 		os.Exit(0)
 	},
 }

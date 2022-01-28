@@ -48,6 +48,11 @@ func (jenga *blkJenga) KeyList() []string {
 	return jenga.blk.Keys()
 }
 
+// 强制同步数据
+func (jenga *blkJenga) Sync() error {
+	return jenga.blk.Flush()
+}
+
 func (jenga *blkJenga) Write(key string, r io.Reader) (size int64, err error) {
 	if !jenga.flag.CanWrite() {
 		return 0, jengaerr.WriteFlagError

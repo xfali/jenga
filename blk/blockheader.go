@@ -64,7 +64,7 @@ type FileHeader struct {
 	MagicCode  uint32
 	Version    uint16
 	DataFormat uint16
-	Reverse    uint16
+	Reserve    uint16
 }
 
 func ReadFileHeader(r io.Reader) (FileHeader, error) {
@@ -95,7 +95,7 @@ func ReadFileHeader(r io.Reader) (FileHeader, error) {
 	if err != nil {
 		return h, err
 	}
-	h.Reverse = binary.BigEndian.Uint16(buf)
+	h.Reserve = binary.BigEndian.Uint16(buf)
 	return h, nil
 }
 
@@ -117,7 +117,7 @@ func WriteFileHeader(h FileHeader, w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	binary.BigEndian.PutUint16(buf, h.Reverse)
+	binary.BigEndian.PutUint16(buf, h.Reserve)
 	_, err = w.Write(buf)
 	if err != nil {
 		return err

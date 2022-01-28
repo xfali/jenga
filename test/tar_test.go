@@ -27,7 +27,7 @@ func TestTar(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer f.Close()
-		err = tar.Write(testFile, 0, f)
+		_, err = tar.Write(testFile, f)
 		if err != nil {
 			t.Fatal(err)
 		}
